@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All subscription, usage and generation data is server-controlled.
+    // Cloud Run uses the Firebase Admin SDK and bypasses these client rules.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

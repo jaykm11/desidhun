@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Meri Bhi Suno",
+    "slug": "meribhisuno",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "meribhisuno",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#0b0714",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "net.desidhun.meribhisuno",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "net.desidhun.meribhisuno",
+      "edgeToEdgeEnabled": true,
+      "permissions": ["INTERNET"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-splash-screen",
+      "expo-audio",
+      "expo-sharing",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Meri Bhi Suno uses your photos only to write lyrics from a picture you choose."
+        }
+      ]
+    ]
+  }
+}

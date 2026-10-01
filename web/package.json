@@ -1,0 +1,32 @@
+{
+  "name": "meribhisuno",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run dev:development",
+    "dev:development": "vite --mode development",
+    "dev:production": "vite --mode production",
+    "build": "npm run build:production",
+    "build:development": "tsc -b && vite build --mode development",
+    "build:production": "tsc -b && vite build --mode production",
+    "lint": "oxlint",
+    "preview": "npm run preview:production",
+    "preview:development": "vite preview --mode development",
+    "preview:production": "vite preview --mode production"
+  },
+  "dependencies": {
+    "firebase": "^12.17.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "oxlint": "^1.75.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  }
+}

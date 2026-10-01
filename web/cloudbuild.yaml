@@ -1,0 +1,41 @@
+substitutions:
+  _REGION: us-central1
+  _SERVICE: deshi-dhun-api
+  _REPOSITORY: deshi-dhun
+  _APP_BASE_URL: https://desidhun.net
+  _ALLOWED_ORIGINS: https://desidhun.net,https://www.desidhun.net,https://desidhun.web.app
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - --file=api/Dockerfile
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --timeout=300
+      - --memory=1Gi
+      - --concurrency=4
+      - --min-instances=1
+      - --service-account=deshi-dhun-api@$PROJECT_ID.iam.gserviceaccount.com
+      - --update-env-vars=^|^APP_BASE_URL=${_APP_BASE_URL}|ALLOWED_ORIGINS=${_ALLOWED_ORIGINS}|GOOGLE_CLOUD_PROJECT=$PROJECT_ID|SONG_LIBRARY_BUCKET=desidhun-songs-365609890674|CLOUD_TASKS_SONG_RENDER_QUEUE=deshi-dhun-song-render|CLOUD_RUN_TASK_URL=https://deshi-dhun-api-365609890674.us-central1.run.app|CLOUD_RUN_TASK_SERVICE_ACCOUNT=deshi-dhun-api@$PROJECT_ID.iam.gserviceaccount.com|STRIPE_PRICE_CREATOR_YEARLY=price_1UBSSpBWZkXKpPonm5Q1vYmG|STRIPE_PRICE_PRO_MONTHLY=price_1UBSSqBWZkXKpPonRhuj6SAh|STRIPE_PRICE_PRO_YEARLY=price_1UBSSqBWZkXKpPonxn4EMEat|STRIPE_PRICE_STUDIO_MONTHLY=price_1UBSSrBWZkXKpPonQgqhV0rU|STRIPE_PRICE_STUDIO_YEARLY=price_1UBSSrBWZkXKpPons8YA7u5p|STRIPE_PRICE_PACK_50=price_1UAxOrBWZkXKpPoneYAFlnVA|STRIPE_PRICE_PACK_150=price_1UAxOrBWZkXKpPonsVnnN9ci
+      - --update-secrets=GEMINI_API_KEY=gemini-api-key:latest,SMTP_APP_PASSWORD=desidhun-smtp-app-password:latest,PAYU_TEST_MERCHANT_KEY=payu-test-merchant-key:latest,PAYU_TEST_MERCHANT_SALT=payu-test-merchant-salt:latest
+      - --remove-env-vars=ADMIN_EMAILS
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
