@@ -15,19 +15,21 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { analyzeRecordedSongStyle, generateLyricsFromImageWithGemini, generateLyricsWithGemini, transcribeRecordedLyrics, type LyricsKind, type LyricsLanguage } from './gemini';
 import { sendCancellationEmail, sendPaymentReceipt, sendWelcomeEmail, usableEmail } from './email';
 import { generateSongWithLyria } from './lyria';
-import { deleteSongAudio, readSongAudio, saveSongAudio } from './songLibrary';
+import { cachedSongVideo, deleteSongAudio, readSongAudio, saveSongAudio } from './songLibrary';
 import { enqueueSongRender } from './songRenderTasks';
 import { generateSpokenNarration } from './tts';
 import { coverThemeForSong, nextSongTitle, resolveCoverTheme, type CoverTheme } from '../../web/src/lib/songIdentity';
 import { displaySongTitle } from '../../web/src/lib/songName';
-import { renderSongVideo } from './youtubeVideo';
 import {
   deleteSongLink,
   getSharedSong,
   getSharedSongAudioPath,
   listCommunitySongs,
+  listExploreRails,
   listFavoriteCommunitySongs,
   listPublicTopCommunitySongs,
+  EXPLORE_KINDS,
+  type ExploreKind,
   makeCommunitySongPrivate,
   publishCommunitySong,
   rateCommunitySong,
@@ -1377,6 +1379,35 @@ api.get('/v1/songs', requireUser, async (req: AuthenticatedRequest, res) => {
   });
 });
 
+function sendMedia(
+  req: Request,
+  res: Response,
+  bytes: Buffer,
+  contentType: string,
+  filename: string,
+  cacheControl: string,
+) {
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.setHeader('Cache-Control', cacheControl);
+  res.setHeader('Accept-Ranges', 'bytes');
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.header('range') ?? '');
+  if (range && (range[1] || range[2])) {
+    const size = bytes.length;
+    let start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    let end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start >= size || start > end) {
+      res.setHeader('Content-Range', `bytes */${size}`);
+      return res.status(416).end();
+    }
+    start = Math.max(0, start);
+    end = Math.max(start, end);
+    res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+    return res.status(206).send(bytes.subarray(start, end + 1));
+  }
+  return res.send(bytes);
+}
+
 function audioDownloadName(title: string): { ascii: string; encoded: string } {
   const trimmed = title.trim() || 'hindi-song';
   const ascii = `${trimmed.replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '') || 'hindi-song'}.mp3`;
@@ -1413,11 +1444,8 @@ api.get('/v1/songs/:songId/video', requireUser, async (req: AuthenticatedRequest
   if (typeof data.gcsPath !== 'string') return res.status(404).json({ error: 'That song has no audio file.' });
 
   try {
-    const audio = await readSongAudio(data.gcsPath);
-    const video = await renderSongVideo(audio, publicSong(songId, data).coverTheme as CoverTheme);
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Cache-Control', 'private, no-store');
-    return res.send(video);
+    const video = await cachedSongVideo(data.gcsPath, publicSong(songId, data).coverTheme as CoverTheme);
+    return sendMedia(req, res, video, 'video/mp4', `${audioDownloadName(typeof data.title === 'string' ? data.title : 'song').ascii.replace(/\.mp3$/, '.mp4')}`, 'private, max-age=3600');
   } catch (error) {
     console.error('Failed to render song video', { songId, error });
     return res.status(503).json({ error: 'The video for YouTube could not be prepared. Please try again.' });
@@ -1540,14 +1568,28 @@ api.post('/v1/songs/:songId/visibility', requireUser, async (req: AuthenticatedR
   }
 });
 
+function requestedExploreKind(value: unknown): ExploreKind | undefined {
+  return EXPLORE_KINDS.find((kind) => kind === value);
+}
+
+api.get('/v1/community/explore', requireUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    return res.json({ rails: await listExploreRails(db, req.user!.uid, 6) });
+  } catch (error) {
+    console.error('Failed to list explore rails', { error });
+    return res.status(503).json({ error: 'Community songs could not be loaded. Please try again.' });
+  }
+});
+
 api.get('/v1/community/songs', requireUser, async (req: AuthenticatedRequest, res) => {
   const sort = req.query.sort === 'top' || req.query.sort === 'favorites' ? req.query.sort : 'featured';
+  const kind = requestedExploreKind(req.query.kind);
   const requested = Number(req.query.limit);
   const limit = Number.isFinite(requested) ? Math.min(48, Math.max(1, Math.floor(requested))) : 6;
   try {
     const songs = sort === 'favorites'
-      ? await listFavoriteCommunitySongs(db, req.user!.uid, limit)
-      : await listCommunitySongs(db, sort, limit, req.user!.uid);
+      ? (await listFavoriteCommunitySongs(db, req.user!.uid, kind ? 48 : limit)).filter((song) => !kind || song.kind === kind).slice(0, limit)
+      : await listCommunitySongs(db, sort, limit, req.user!.uid, kind);
     return res.json({ songs });
   } catch (error) {
     console.error('Failed to list community songs', { sort, error });
@@ -1632,6 +1674,24 @@ api.get('/v1/public/songs/:songId/audio', async (req, res) => {
     console.error('Failed to read shared song audio', { songId, path: file.path, error });
     return res.status(404).json({ error: 'The audio file could not be read.' });
   }
+});
+
+async function sendSharedSongVideo(songId: string, req: Request, res: Response) {
+  const song = await getSharedSong(db, songId);
+  const file = await getSharedSongAudioPath(db, songId);
+  if (!song || !file) return res.status(404).json({ error: 'This song is no longer available.' });
+  try {
+    const video = await cachedSongVideo(file.path, song.coverTheme);
+    const filename = audioDownloadName(file.title).ascii.replace(/\.mp3$/, '.mp4');
+    return sendMedia(req, res, video, 'video/mp4', filename, 'public, max-age=86400');
+  } catch (error) {
+    console.error('Failed to render shared song video', { songId, error });
+    return res.status(503).json({ error: 'The video could not be prepared. Please try again.' });
+  }
+}
+
+api.get('/v1/public/songs/:songId/video', async (req, res) => {
+  return sendSharedSongVideo(String(req.params.songId ?? ''), req, res);
 });
 
 api.get('/v1/community/songs/:songId/audio', requireUser, async (req: AuthenticatedRequest, res) => {
@@ -2632,16 +2692,22 @@ function publicApiBaseUrl(): string {
 }
 
 const server = express();
+server.get('/s/:songId/video.mp4', async (req, res) => {
+  return sendSharedSongVideo(String(req.params.songId ?? ''), req, res);
+});
+
 server.get('/s/:songId', async (req, res) => {
   const song = await getSharedSong(db, String(req.params.songId ?? ''));
   res.setHeader('Cache-Control', 'public, max-age=60');
   if (!song) return res.status(404).send(missingSharedSongHtml(appBaseUrl));
+  const id = encodeURIComponent(song.id);
   return res
     .type('html')
     .send(sharedSongHtml({
       song,
       appBaseUrl,
-      audioUrl: `${publicApiBaseUrl()}/api/v1/public/songs/${encodeURIComponent(song.id)}/audio`,
+      audioUrl: `${publicApiBaseUrl()}/api/v1/public/songs/${id}/audio`,
+      videoUrl: `${appBaseUrl.replace(/\/$/, '')}/s/${id}/video.mp4`,
     }));
 });
 server.use('/api', api);

@@ -220,17 +220,28 @@ export interface LibrarySong {
 
 export type CommunityVote = 'like' | 'dislike';
 
+export type ExploreKind = 'songs' | 'reels' | 'music' | 'podcast';
+
 export interface CommunitySong {
   id: string;
   title: string;
   artistName: string;
   coverTheme?: string;
+  kind?: ExploreKind;
   publishedAt: string;
   viewCount: number;
   likeCount: number;
   dislikeCount: number;
   myVote: CommunityVote | null;
 }
+
+export interface ExploreRail {
+  featured: CommunitySong[];
+  top: CommunitySong[];
+  favorites: CommunitySong[];
+}
+
+export type ExploreRails = Record<ExploreKind, ExploreRail>;
 
 export type SongGenerator = 'lyria' | 'chirp-3-hd';
 
@@ -329,8 +340,19 @@ export function createShareableLink(user: User, songId: string) {
   });
 }
 
-export function listCommunitySongs(user: User, sort: 'featured' | 'top' | 'favorites', limit = 6) {
-  return apiFetch<{ songs: CommunitySong[] }>(user, `/api/v1/community/songs?sort=${sort}&limit=${limit}`);
+export function listCommunitySongs(
+  user: User,
+  sort: 'featured' | 'top' | 'favorites',
+  limit = 6,
+  kind?: ExploreKind,
+) {
+  const params = new URLSearchParams({ sort, limit: String(limit) });
+  if (kind) params.set('kind', kind);
+  return apiFetch<{ songs: CommunitySong[] }>(user, `/api/v1/community/songs?${params.toString()}`);
+}
+
+export function listCommunityExplore(user: User) {
+  return apiFetch<{ rails: ExploreRails }>(user, '/api/v1/community/explore');
 }
 
 export function recordCommunityPlay(user: User, songId: string) {

@@ -22,8 +22,14 @@ export async function copyShareableLink(songId: string): Promise<string> {
   return url;
 }
 
+/** Direct MP4 so WhatsApp shows the cover as the thumbnail and plays the song inline. */
+export function songVideoShareUrl(songId: string): string {
+  const origin = window.location.origin.replace(/\/$/, '');
+  return `${origin}/s/${encodeURIComponent(songId)}/video.mp4`;
+}
+
 export function whatsAppShareUrl(songId: string, title: string): string {
-  const url = songShareUrl(songId);
+  const url = songVideoShareUrl(songId);
   const text = `${songShareText(title)}\n${url}`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }

@@ -110,7 +110,6 @@ export function LoginTopSongs({ alignBottomTo }: { alignBottomTo?: string }) {
                     </span>
                   </span>
                   <strong>{song.title}</strong>
-                  <span className="login-top-song-artist">{song.artistName}</span>
                 </button>
               </li>
             );

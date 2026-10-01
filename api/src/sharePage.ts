@@ -15,6 +15,7 @@ export function sharedSongHtml(options: {
   song: CommunitySong;
   appBaseUrl: string;
   audioUrl: string;
+  videoUrl: string;
 }): string {
   const title = options.song.title.trim() || 'Untitled';
   const artist = options.song.artistName.trim() || 'Desi Dhun artist';
@@ -28,12 +29,17 @@ export function sharedSongHtml(options: {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)} · Desi Dhun</title>
   <meta name="description" content="${escapeHtml(description)}">
-  <meta property="og:type" content="music.song">
+  <meta property="og:type" content="video.other">
   <meta property="og:site_name" content="Desi Dhun">
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:url" content="${escapeHtml(pageUrl)}">
   <meta property="og:image" content="${escapeHtml(imageUrl)}">
+  <meta property="og:video" content="${escapeHtml(options.videoUrl)}">
+  <meta property="og:video:secure_url" content="${escapeHtml(options.videoUrl)}">
+  <meta property="og:video:type" content="video/mp4">
+  <meta property="og:video:width" content="1280">
+  <meta property="og:video:height" content="720">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
@@ -65,7 +71,7 @@ export function sharedSongHtml(options: {
     img { width: 160px; height: 160px; object-fit: cover; border-radius: 12px; }
     h1 { margin: 0 0 6px; font-size: 1.6rem; }
     p { margin: 0 0 16px; color: #b8b0c8; }
-    audio { width: 100%; }
+    audio, video { width: 100%; border-radius: 12px; background: #0b0917; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
     button, .home {
       display: inline-block;
@@ -92,7 +98,7 @@ export function sharedSongHtml(options: {
       <div>
         <h1>${escapeHtml(title)}</h1>
         <p>${escapeHtml(artist)}</p>
-        <audio controls preload="metadata" src="${escapeHtml(options.audioUrl)}"></audio>
+        <video controls playsinline preload="metadata" poster="${escapeHtml(imageUrl)}" src="${escapeHtml(options.videoUrl)}"></video>
         <div class="actions">
           <button type="button" id="share">Share</button>
           <a class="home" href="${escapeHtml(options.appBaseUrl)}">Open Desi Dhun</a>

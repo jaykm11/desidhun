@@ -55,6 +55,7 @@ export default function AccountPage() {
               <span>Membership duration</span>
               <strong>{account.membership.periodEnd ? `Through ${date(account.membership.periodEnd)}` : 'No active membership period'}</strong>
             </div>
+            <div className="account-summary-spacer" aria-hidden="true" />
           </section>
           <section>
             <h2>Membership and payment history</h2>

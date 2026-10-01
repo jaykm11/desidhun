@@ -3,11 +3,14 @@ import type { User } from 'firebase/auth';
 import {
   ApiError,
   fetchCommunitySongAudio,
-  listCommunitySongs,
+  listCommunityExplore,
   rateCommunitySong,
   recordCommunityPlay,
   type CommunitySong,
   type CommunityVote,
+  type ExploreKind,
+  type ExploreRail,
+  type ExploreRails,
 } from './lib/api';
 import { ShareMenu } from './ShareButton';
 import { coverImageForTheme, resolveCoverTheme } from './lib/songIdentity';
@@ -215,6 +218,63 @@ export function useCommunityPlayback(user: User | null, pauseToken = 0) {
   };
 }
 
+const EXPLORE_SECTIONS: readonly {
+  id: ExploreKind;
+  title: string;
+  featured: string;
+  top: string;
+  favorites: string;
+  emptyFeatured: string;
+  emptyTop: string;
+}[] = [
+  {
+    id: 'songs',
+    title: 'Songs',
+    featured: 'Featured Songs',
+    top: 'Top Songs',
+    favorites: 'My Favorites',
+    emptyFeatured: 'Share a song from your library to appear here.',
+    emptyTop: 'The most liked public songs will appear here.',
+  },
+  {
+    id: 'reels',
+    title: 'Reels',
+    featured: 'Featured Reels',
+    top: 'Top Reels',
+    favorites: 'My Favorites',
+    emptyFeatured: 'Share a reel from your library to appear here.',
+    emptyTop: 'The most liked public reels will appear here.',
+  },
+  {
+    id: 'music',
+    title: 'Music',
+    featured: 'Featured Music',
+    top: 'Top Music',
+    favorites: 'My Favorites',
+    emptyFeatured: 'Share instrumental music from your library to appear here.',
+    emptyTop: 'The most liked public music will appear here.',
+  },
+  {
+    id: 'podcast',
+    title: 'Podcasts',
+    featured: 'Featured Podcasts',
+    top: 'Top Podcasts',
+    favorites: 'My Favorites',
+    emptyFeatured: 'Share a podcast from your library to appear here.',
+    emptyTop: 'The most liked public podcasts will appear here.',
+  },
+];
+
+const EMPTY_RAIL: ExploreRail = { featured: [], top: [], favorites: [] };
+
+function rememberRails(rails: ExploreRails): CommunitySong[] {
+  return EXPLORE_SECTIONS.flatMap((section) => [
+    ...rails[section.id].featured,
+    ...rails[section.id].top,
+    ...rails[section.id].favorites,
+  ]);
+}
+
 export function CommunityRail({
   user,
   refreshToken = 0,
@@ -226,24 +286,16 @@ export function CommunityRail({
   pauseToken?: number;
   onPlayStart?: () => void;
 }) {
-  const [featured, setFeatured] = useState<CommunitySong[]>([]);
-  const [top, setTop] = useState<CommunitySong[]>([]);
-  const [favorites, setFavorites] = useState<CommunitySong[]>([]);
+  const [rails, setRails] = useState<ExploreRails | null>(null);
   const playback = useCommunityPlayback(user, pauseToken);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      listCommunitySongs(user, 'featured', 6),
-      listCommunitySongs(user, 'top', 6),
-      listCommunitySongs(user, 'favorites', 6),
-    ])
-      .then(([latest, popular, liked]) => {
+    listCommunityExplore(user)
+      .then(({ rails: loaded }) => {
         if (cancelled) return;
-        setFeatured(latest.songs);
-        setTop(popular.songs);
-        setFavorites(liked.songs);
-        playback.remember([...latest.songs, ...popular.songs, ...liked.songs]);
+        setRails(loaded);
+        playback.remember(rememberRails(loaded));
       })
       .catch((reason) => {
         if (!cancelled) playback.setError(reason instanceof ApiError ? reason.message : 'Community songs could not be loaded.');
@@ -259,64 +311,74 @@ export function CommunityRail({
   const applyRated = (song: CommunitySong, vote: CommunityVote) => {
     void playback.rate(song, vote).then((updated) => {
       if (!updated) return;
-      setFeatured((current) => current.map((item) => item.id === song.id ? { ...item, ...updated } : item));
-      setTop((current) => sortTopSongs(current.map((item) => item.id === song.id ? { ...item, ...updated } : item)));
-      setFavorites((current) => {
-        if (updated.myVote === 'like') {
-          const exists = current.some((item) => item.id === updated.id);
-          return exists
-            ? current.map((item) => item.id === updated.id ? { ...item, ...updated } : item)
-            : [updated, ...current].slice(0, 6);
+      const kind = updated.kind ?? song.kind ?? 'songs';
+      setRails((current) => {
+        if (!current) return current;
+        const next = { ...current };
+        for (const section of EXPLORE_SECTIONS) {
+          const rail = current[section.id];
+          const mapSong = (item: CommunitySong) => item.id === song.id ? { ...item, ...updated, kind: item.kind ?? kind } : item;
+          next[section.id] = {
+            featured: rail.featured.map(mapSong),
+            top: sortTopSongs(rail.top.map(mapSong)),
+            favorites: section.id !== kind
+              ? rail.favorites.filter((item) => item.id !== updated.id)
+              : updated.myVote === 'like'
+                ? (rail.favorites.some((item) => item.id === updated.id)
+                  ? rail.favorites.map(mapSong)
+                  : [{ ...updated, kind }, ...rail.favorites].slice(0, 6))
+                : rail.favorites.filter((item) => item.id !== updated.id),
+          };
         }
-        return current.filter((item) => item.id !== updated.id);
+        return next;
       });
     });
   };
 
+  const columnProps = {
+    currentId: playback.current?.id ?? null,
+    playing: playback.playing,
+    progress: playback.progress,
+    duration: playback.duration,
+    onPlay: play,
+    onSeek: playback.seek,
+    onRate: applyRated,
+    resolve: playback.resolve,
+  };
+
   return (
-    <section className="community-box" aria-label="Desi Dhun Community">
-      <CommunityColumn
-        title="Featured Songs"
-        browseHref="/community?sort=featured"
-        songs={featured}
-        empty="Share a song from your library to appear here."
-        currentId={playback.current?.id ?? null}
-        playing={playback.playing}
-        progress={playback.progress}
-        duration={playback.duration}
-        onPlay={play}
-        onSeek={playback.seek}
-        onRate={applyRated}
-        resolve={playback.resolve}
-      />
-      <CommunityColumn
-        title="Top Songs"
-        browseHref="/community?sort=top"
-        songs={top}
-        empty="The most liked public songs will appear here."
-        currentId={playback.current?.id ?? null}
-        playing={playback.playing}
-        progress={playback.progress}
-        duration={playback.duration}
-        onPlay={play}
-        onSeek={playback.seek}
-        onRate={applyRated}
-        resolve={playback.resolve}
-      />
-      <CommunityColumn
-        title="My Favorites"
-        browseHref="/community?sort=favorites"
-        songs={favorites}
-        empty="Public songs you like will appear here."
-        currentId={playback.current?.id ?? null}
-        playing={playback.playing}
-        progress={playback.progress}
-        duration={playback.duration}
-        onPlay={play}
-        onSeek={playback.seek}
-        onRate={applyRated}
-        resolve={playback.resolve}
-      />
+    <div className="explore-sections">
+      {EXPLORE_SECTIONS.map((section) => {
+        const rail = rails?.[section.id] ?? EMPTY_RAIL;
+        return (
+          <section key={section.id} className="explore-section" aria-label={section.title}>
+            <h2 className="explore-section-title">{section.title}</h2>
+            <div className="community-box">
+              <CommunityColumn
+                title={section.featured}
+                browseHref={`/community?sort=featured&kind=${section.id}`}
+                songs={rail.featured}
+                empty={section.emptyFeatured}
+                {...columnProps}
+              />
+              <CommunityColumn
+                title={section.top}
+                browseHref={`/community?sort=top&kind=${section.id}`}
+                songs={rail.top}
+                empty={section.emptyTop}
+                {...columnProps}
+              />
+              <CommunityColumn
+                title={section.favorites}
+                browseHref={`/community?sort=favorites&kind=${section.id}`}
+                songs={rail.favorites}
+                empty="Pieces you like will appear here."
+                {...columnProps}
+              />
+            </div>
+          </section>
+        );
+      })}
       {playback.error && <p className="community-error" role="alert">{playback.error}</p>}
       <audio
         ref={playback.audioRef}
@@ -327,7 +389,7 @@ export function CommunityRail({
         onLoadedMetadata={(event) => playback.setDuration(event.currentTarget.duration)}
         onTimeUpdate={(event) => playback.setProgress(event.currentTarget.currentTime)}
       />
-    </section>
+    </div>
   );
 }
 

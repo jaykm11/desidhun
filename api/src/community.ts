@@ -1,4 +1,4 @@
-import { FieldValue, Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import type { CoverTheme } from '../../web/src/lib/songIdentity';
 import { resolveCoverTheme } from '../../web/src/lib/songIdentity';
 import { PRESET_SONGS } from './presets';
@@ -10,16 +10,40 @@ export type CommunitySort = 'featured' | 'top' | 'favorites';
 
 export type CommunityVote = 'like' | 'dislike';
 
+export type ExploreKind = 'songs' | 'reels' | 'music' | 'podcast';
+
+export const EXPLORE_KINDS: readonly ExploreKind[] = ['songs', 'reels', 'music', 'podcast'];
+
 export interface CommunitySong {
   id: string;
   title: string;
   artistName: string;
   coverTheme: CoverTheme;
+  kind: ExploreKind;
   publishedAt: string;
   viewCount: number;
   likeCount: number;
   dislikeCount: number;
   myVote: CommunityVote | null;
+}
+
+export interface ExploreRail {
+  featured: CommunitySong[];
+  top: CommunitySong[];
+  favorites: CommunitySong[];
+}
+
+export type ExploreRails = Record<ExploreKind, ExploreRail>;
+
+export function exploreKindFor(style: string, lyrics: string): ExploreKind {
+  if (style.includes('DIALOGUE_PUNCHLINE_DELIVERY')) return 'reels';
+  if (style.includes('SPOKEN_WORD_DELIVERY')) return 'podcast';
+  if (/instrumental composition only/i.test(`${style}\n${lyrics}`)) return 'music';
+  return 'songs';
+}
+
+function asExploreKind(value: unknown): ExploreKind | null {
+  return value === 'songs' || value === 'reels' || value === 'music' || value === 'podcast' ? value : null;
 }
 
 function asDate(value: unknown): Date | null {
@@ -54,6 +78,10 @@ export function serializeCommunitySong(
     title: typeof data.title === 'string' && data.title.trim() ? data.title : 'Untitled',
     artistName: artistNameFrom(data.artistName, data.artistEmail),
     coverTheme: resolveCoverTheme(data.coverTheme, typeof data.title === 'string' ? data.title : ''),
+    kind: asExploreKind(data.kind) ?? exploreKindFor(
+      typeof data.style === 'string' ? data.style : '',
+      typeof data.lyrics === 'string' ? data.lyrics : '',
+    ),
     publishedAt: published.toISOString(),
     viewCount: countField(data.viewCount),
     likeCount: countField(data.likeCount),
@@ -185,6 +213,7 @@ export async function publishCommunitySong(
   const lyrics = typeof song.lyrics === 'string' ? song.lyrics : '';
   const coverTheme = resolveCoverTheme(song.coverTheme, title, style, lyrics);
   const artistName = artistNameFrom(owner.displayName, owner.email);
+  const kind = exploreKindFor(style, lyrics);
   const existing = await db.collection(COMMUNITY_SONGS).doc(songId).get();
   const publishedAt = existing.exists
     ? (existing.data()?.publishedAt ?? FieldValue.serverTimestamp())
@@ -200,6 +229,9 @@ export async function publishCommunitySong(
     artistName,
     artistEmail: owner.email ?? null,
     coverTheme,
+    kind,
+    style,
+    lyrics,
     gcsPath,
     publishedAt,
     viewCount,
@@ -232,33 +264,96 @@ export async function makeCommunitySongPrivate(db: Firestore, ownerUid: string, 
   }
 }
 
+async function resolvedExploreKind(
+  db: Firestore,
+  songId: string,
+  data: { [field: string]: unknown },
+): Promise<ExploreKind> {
+  const stored = asExploreKind(data.kind);
+  if (stored) return stored;
+  let style = typeof data.style === 'string' ? data.style : '';
+  let lyrics = typeof data.lyrics === 'string' ? data.lyrics : '';
+  const ownerUid = typeof data.ownerUid === 'string' ? data.ownerUid : '';
+  if (!style && !lyrics && ownerUid) {
+    const source = await db.collection('users').doc(ownerUid).collection('songs').doc(songId).get();
+    const sourceData = source.data() ?? {};
+    style = typeof sourceData.style === 'string' ? sourceData.style : '';
+    lyrics = typeof sourceData.lyrics === 'string' ? sourceData.lyrics : '';
+  }
+  const kind = exploreKindFor(style, lyrics);
+  await db.collection(COMMUNITY_SONGS).doc(songId).set({ kind }, { merge: true }).catch(() => undefined);
+  return kind;
+}
+
+async function songsWithKind(
+  db: Firestore,
+  docs: QueryDocumentSnapshot[],
+): Promise<CommunitySong[]> {
+  const songs: CommunitySong[] = [];
+  for (let index = 0; index < docs.length; index += 20) {
+    const chunk = docs.slice(index, index + 20);
+    songs.push(...await Promise.all(chunk.map(async (doc) => {
+      const data = doc.data();
+      const kind = await resolvedExploreKind(db, doc.id, data);
+      return serializeCommunitySong(doc.id, { ...data, kind });
+    })));
+  }
+  return songs;
+}
+
+function byPopularity(left: CommunitySong, right: CommunitySong): number {
+  return right.likeCount - left.likeCount
+    || right.viewCount - left.viewCount
+    || right.publishedAt.localeCompare(left.publishedAt);
+}
+
+async function attachVotes(db: Firestore, songs: CommunitySong[], viewerUid: string): Promise<CommunitySong[]> {
+  const votes = await Promise.all(songs.map((song) => (
+    db.collection(COMMUNITY_SONGS).doc(song.id).collection('votes').doc(viewerUid).get()
+  )));
+  return songs.map((song, index) => {
+    const vote = votes[index].data()?.vote;
+    return { ...song, myVote: vote === 'like' || vote === 'dislike' ? vote : null };
+  });
+}
+
 export async function listCommunitySongs(
   db: Firestore,
   sort: CommunitySort,
   limit: number,
   viewerUid: string,
+  kind?: ExploreKind,
 ): Promise<CommunitySong[]> {
   const snapshot = await db
     .collection(COMMUNITY_SONGS)
     .orderBy('publishedAt', 'desc')
-    .limit(sort === 'top' ? Math.max(limit, 48) : limit)
+    .limit(kind ? 240 : sort === 'top' ? Math.max(limit, 48) : limit)
     .get();
-  const songs = snapshot.docs.map((doc) => serializeCommunitySong(doc.id, doc.data()));
-  if (sort === 'top') {
-    songs.sort((left, right) => (
-      right.likeCount - left.likeCount
-      || right.viewCount - left.viewCount
-      || right.publishedAt.localeCompare(left.publishedAt)
-    ));
-  }
+  const songs = kind
+    ? (await songsWithKind(db, snapshot.docs)).filter((song) => song.kind === kind)
+    : snapshot.docs.map((doc) => serializeCommunitySong(doc.id, doc.data()));
+  if (sort === 'top') songs.sort(byPopularity);
   const page = songs.slice(0, limit);
-  const votes = await Promise.all(page.map((song) => (
-    db.collection(COMMUNITY_SONGS).doc(song.id).collection('votes').doc(viewerUid).get()
-  )));
-  return page.map((song, index) => {
-    const vote = votes[index].data()?.vote;
-    return { ...song, myVote: vote === 'like' || vote === 'dislike' ? vote : null };
-  });
+  return attachVotes(db, page, viewerUid);
+}
+
+export async function listExploreRails(db: Firestore, viewerUid: string, limit = 6): Promise<ExploreRails> {
+  const snapshot = await db.collection(COMMUNITY_SONGS).orderBy('publishedAt', 'desc').limit(240).get();
+  const songs = await songsWithKind(db, snapshot.docs);
+  const favorites = await listFavoriteCommunitySongs(db, viewerUid, 48);
+  const rails = {} as ExploreRails;
+  for (const kind of EXPLORE_KINDS) {
+    const matching = songs.filter((song) => song.kind === kind);
+    const featured = matching.slice(0, limit);
+    const top = [...matching].sort(byPopularity).slice(0, limit);
+    const liked = favorites.filter((song) => song.kind === kind).slice(0, limit);
+    rails[kind] = {
+      featured: await attachVotes(db, featured, viewerUid),
+      top: await attachVotes(db, top, viewerUid),
+      favorites: liked,
+    };
+  }
+  return rails;
 }
 
 export async function listPublicTopCommunitySongs(db: Firestore, limit: number): Promise<CommunitySong[]> {
@@ -359,7 +454,9 @@ export async function listFavoriteCommunitySongs(
       await favoritesRef.doc(songId).delete().catch(() => undefined);
       return null;
     }
-    return serializeCommunitySong(songId, snapshot.data() ?? {}, 'like');
+    const data = snapshot.data() ?? {};
+    const kind = await resolvedExploreKind(db, songId, data);
+    return serializeCommunitySong(songId, { ...data, kind }, 'like');
   }));
   return songs.filter((song): song is CommunitySong => song !== null);
 }

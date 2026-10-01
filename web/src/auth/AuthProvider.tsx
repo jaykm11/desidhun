@@ -147,6 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOutUser() {
         if (firebaseAuth) await signOut(firebaseAuth);
+        const path = window.location.pathname.replace(/\/+$/, '');
+        if (path !== '') window.location.assign('/');
       },
     }),
     [isLoading, user],

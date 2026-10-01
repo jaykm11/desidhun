@@ -120,17 +120,28 @@ export interface LibrarySong {
 
 export type CommunityVote = 'like' | 'dislike';
 
+export type ExploreKind = 'songs' | 'reels' | 'music' | 'podcast';
+
 export interface CommunitySong {
   id: string;
   title: string;
   artistName: string;
   coverTheme?: string;
+  kind?: ExploreKind;
   publishedAt: string;
   viewCount: number;
   likeCount: number;
   dislikeCount: number;
   myVote: CommunityVote | null;
 }
+
+export interface ExploreRail {
+  featured: CommunitySong[];
+  top: CommunitySong[];
+  favorites: CommunitySong[];
+}
+
+export type ExploreRails = Record<ExploreKind, ExploreRail>;
 
 export type SongGenerator = 'lyria' | 'chirp-3-hd';
 export type LyricsLanguage = 'hindi' | 'english' | 'other';
@@ -251,8 +262,19 @@ export function createShareableLink(user: User, songId: string) {
   });
 }
 
-export function listCommunitySongs(user: User, sort: 'featured' | 'top' | 'favorites', limit = 20) {
-  return apiFetch<{ songs: CommunitySong[] }>(user, `/api/v1/community/songs?sort=${sort}&limit=${limit}`);
+export function listCommunitySongs(
+  user: User,
+  sort: 'featured' | 'top' | 'favorites',
+  limit = 20,
+  kind?: ExploreKind,
+) {
+  const params = new URLSearchParams({ sort, limit: String(limit) });
+  if (kind) params.set('kind', kind);
+  return apiFetch<{ songs: CommunitySong[] }>(user, `/api/v1/community/songs?${params.toString()}`);
+}
+
+export function listCommunityExplore(user: User) {
+  return apiFetch<{ rails: ExploreRails }>(user, '/api/v1/community/explore');
 }
 
 export function recordCommunityPlay(user: User, songId: string) {
@@ -304,7 +326,18 @@ export function communitySongAudioUrl(songId: string): string {
   return `${apiBaseUrl()}/api/v1/community/songs/${encodeURIComponent(songId)}/audio`;
 }
 
+function appBaseUrl(): string {
+  return (process.env.EXPO_PUBLIC_APP_BASE_URL ?? 'https://desidhun.net').replace(/\/$/, '');
+}
+
 export function songShareUrl(songId: string): string {
-  const appBase = (process.env.EXPO_PUBLIC_APP_BASE_URL ?? 'https://desidhun.net').replace(/\/$/, '');
-  return `${appBase}/s/${encodeURIComponent(songId)}`;
+  return `${appBaseUrl()}/s/${encodeURIComponent(songId)}`;
+}
+
+export function songVideoShareUrl(songId: string): string {
+  return `${appBaseUrl()}/s/${encodeURIComponent(songId)}/video.mp4`;
+}
+
+export function librarySongVideoUrl(songId: string): string {
+  return `${apiBaseUrl()}/api/v1/songs/${encodeURIComponent(songId)}/video`;
 }

@@ -13,7 +13,7 @@ import {
   songIsPending,
   type LibrarySong,
 } from '@/lib/api';
-import { forgetCachedAudio, librarySongFile, shareAudioFile } from '@/lib/media';
+import { forgetCachedAudio, librarySongFile, librarySongVideoFile, shareVideoFile } from '@/lib/media';
 import { usePlayer } from '@/player/PlayerProvider';
 import { colors, radius, spacing, typography } from '@/theme';
 import { displaySongTitle } from '@shared/lib/songName';
@@ -71,10 +71,10 @@ export default function LibraryScreen() {
   const share = async (song: LibrarySong) => {
     if (!user) return;
     try {
-      const uri = await librarySongFile(user, song.id);
-      await shareAudioFile(uri, displaySongTitle(song.title));
+      const uri = await librarySongVideoFile(user, song.id);
+      await shareVideoFile(uri, displaySongTitle(song.title));
     } catch (cause) {
-      setError(errorMessage(cause, 'The audio could not be shared.'));
+      setError(errorMessage(cause, 'The video could not be shared.'));
     }
   };
 

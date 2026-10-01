@@ -28,7 +28,7 @@ import {
   songShareUrl,
   type LibrarySong,
 } from '@/lib/api';
-import { librarySongFile, shareAudioFile, shareSongLink } from '@/lib/media';
+import { librarySongFile, librarySongVideoFile, shareSongLink, shareVideoFile } from '@/lib/media';
 import { formatPlaybackTime, usePlayer } from '@/player/PlayerProvider';
 import { colors, spacing, typography } from '@/theme';
 import { displaySongTitle } from '@shared/lib/songName';
@@ -133,10 +133,10 @@ export default function SongScreen() {
   const shareFile = async () => {
     if (!user) return;
     try {
-      const uri = await librarySongFile(user, song.id);
-      await shareAudioFile(uri, displaySongTitle(song.title));
+      const uri = await librarySongVideoFile(user, song.id);
+      await shareVideoFile(uri, displaySongTitle(song.title));
     } catch (cause) {
-      setError(errorMessage(cause, 'The audio could not be shared.'));
+      setError(errorMessage(cause, 'The video could not be shared.'));
     }
   };
 
@@ -177,7 +177,7 @@ export default function SongScreen() {
 
         <Card>
           <Heading>Share</Heading>
-          <Button label="Share the audio file" variant="secondary" icon="share" disabled={pending} onPress={() => void shareFile()} />
+          <Button label="Share a video" variant="secondary" icon="share" disabled={pending} onPress={() => void shareFile()} />
           <Button
             label="Share a link"
             variant="secondary"

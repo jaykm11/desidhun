@@ -1,4 +1,5 @@
 import * as WebBrowser from 'expo-web-browser';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { useAuth } from '@/auth/AuthProvider';
@@ -40,6 +41,7 @@ function creditLine(label: string, free: number | null, subscription: number | n
 }
 
 export default function AccountScreen() {
+  const router = useRouter();
   const { user, signOutUser } = useAuth();
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [account, setAccount] = useState<AccountDetails | null>(null);
@@ -229,7 +231,14 @@ export default function AccountScreen() {
         ))}
       </Section>
 
-      <Button label="Sign out" variant="danger" icon="log-out-outline" onPress={() => void signOutUser()} />
+      <Button
+        label="Sign out"
+        variant="danger"
+        icon="log-out-outline"
+        onPress={() => {
+          void signOutUser().then(() => router.replace('/sign-in'));
+        }}
+      />
       <View style={{ height: spacing.xl }} />
     </ScreenScroll>
   );

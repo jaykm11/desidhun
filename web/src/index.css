@@ -481,7 +481,7 @@ body {
 }
 
 .app-shell .site-header {
-  margin-bottom: 0;
+  margin-bottom: 32px;
 }
 
 .app-shell .site-footer {
@@ -4637,6 +4637,10 @@ textarea:disabled {
   .account-summary {
     grid-template-columns: 1fr;
   }
+
+  .account-summary-spacer {
+    display: none;
+  }
 }
 
 /* ---------- indigo studio palette ---------- */
@@ -5322,6 +5326,23 @@ textarea:focus,
 
 .explore-page .community-box {
   margin-top: 18px;
+}
+
+.explore-sections {
+  display: grid;
+  gap: 28px;
+  margin-top: 18px;
+}
+
+.explore-sections .community-box {
+  margin-top: 0;
+}
+
+.explore-section-title {
+  margin: 0 0 12px;
+  color: var(--gold);
+  font-family: 'Playfair Display', serif;
+  font-size: 1.35rem;
 }
 
 .community-sort-nav {

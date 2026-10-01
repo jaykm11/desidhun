@@ -137,10 +137,7 @@ export function PresetCard({
       </div>
       <div className="community-song-copy">
         <strong>{preset.title}</strong>
-        <span>
-          {showCategory ? `${PRESET_CATEGORY_LABELS[preset.category]} · ` : ''}
-          {preset.artistName}
-        </span>
+        {showCategory && <span>{PRESET_CATEGORY_LABELS[preset.category]}</span>}
         {preset.lyricsExcerpt && <span className="preset-excerpt">{preset.lyricsExcerpt}</span>}
         {showCategory && preset.markedByEmail && (
           <span className="preset-meta">Marked by {preset.markedByEmail} · {new Date(preset.markedAt).toLocaleDateString()}</span>
