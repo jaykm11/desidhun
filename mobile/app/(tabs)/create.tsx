@@ -48,7 +48,7 @@ import {
   spokenMediaById,
 } from '@shared/data/speechOptions';
 import { DEFAULT_TEMPO_SPEED, TEMPO_SPEED_MAX, TEMPO_SPEED_MIN, tempoBand } from '@shared/data/tempo';
-import { DIALOGUE_VOICE_PRESETS, VOICE_PRESETS, dialoguePresetsFor } from '@shared/data/voicePresets';
+import { VOICE_PRESETS, dialoguePresetsFor } from '@shared/data/voicePresets';
 import {
   DEFAULT_PAUSE_LEVEL,
   DEFAULT_VOICE_TONE,
@@ -160,6 +160,11 @@ export default function CreateScreen() {
   );
 
   useEffect(() => {
+    setVoicePresetId('');
+  }, [kind]);
+
+  useEffect(() => {
+    if (kind === 'dialogue-punchline') return;
     setVoicePresetId('');
   }, [vocal, kind]);
 
@@ -452,7 +457,7 @@ export default function CreateScreen() {
               </Section>
 
               {voicePresets.length > 0 ? (
-                <Section label="Voice character">
+                <Section label="Voice style">
                   <ChipRow
                     options={[
                       { id: '', name: 'Default' },

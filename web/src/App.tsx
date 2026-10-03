@@ -384,9 +384,7 @@ export default function App() {
   }, [lyrics, compositionKind]);
   const options: AnalysisOptions = useMemo(
     () => ({
-      vocal: compositionKind === 'dialogue-punchline'
-        ? DIALOGUE_VOICE_PRESETS.find((preset) => preset.id === voicePresetId)?.vocal ?? (vocal === 'auto' ? 'male' : vocal)
-        : vocal,
+      vocal: compositionKind === 'dialogue-punchline' && vocal === 'auto' ? 'male' : vocal,
       voiceStyleId: vocal === 'auto' && !isDialogueGenre(compositionGenre) ? undefined : voicePresetId || undefined,
       tempo: tempoBand(tempoSpeed),
       tempoSpeed,
@@ -619,6 +617,8 @@ export default function App() {
         if (DIALOGUE_LANGUAGES.some((item) => item.id === language)) setChosenDialogueLanguage(language as DialogueLanguage);
         const media = tags.get('SPOKEN_MEDIA');
         if (SPOKEN_MEDIA_TYPES.some((item) => item.id === media)) setSpokenMediaType(media as SpokenMediaType);
+        const styleId = tags.get('DIALOGUE_STYLE');
+        if (DIALOGUE_VOICE_PRESETS.some((preset) => preset.id === styleId)) setVoicePresetId(styleId ?? '');
         const presetVocal = tags.get('DIALOGUE_VOCAL') ?? tags.get('SPOKEN_VOCAL');
         if (presetVocal && ['female', 'male', 'duet', 'child'].includes(presetVocal)) setVocal(presetVocal as Vocal);
 
@@ -768,13 +768,14 @@ export default function App() {
     const dialoguePreset = isDialogueGenre(compositionGenre)
       ? DIALOGUE_VOICE_PRESETS.find((preset) => preset.id === voicePresetId)
       : undefined;
-    const voicePreset = isDialogueGenre(compositionGenre)
-      ? dialoguePreset
-      : vocal === 'auto'
-        ? undefined
-        : VOICE_PRESETS[vocal].find((preset) => preset.id === voicePresetId);
-    const speaker = voicePreset?.speaker ?? speakerForVocal(resolvedVocal);
-    return { dialoguePreset, voicePreset, speaker };
+    const voicePreset = isDialogueGenre(compositionGenre) || vocal === 'auto'
+      ? undefined
+      : VOICE_PRESETS[vocal].find((preset) => preset.id === voicePresetId);
+    const dialogueVocal = vocal === 'auto' ? 'male' : vocal;
+    const speaker = isDialogueGenre(compositionGenre)
+      ? speakerForVocal(dialogueVocal)
+      : voicePreset?.speaker ?? speakerForVocal(resolvedVocal);
+    return { dialoguePreset, voicePreset, speaker, dialogueVocal };
   };
 
   /** Human-readable style shown in Edit Style — driven by lyric analysis + composition choices. */
@@ -795,14 +796,11 @@ export default function App() {
 
   /** Machine tags the API/TTS parsers need — appended at generate time, not shown in Edit Style. */
   const buildMachineStyleTags = (resolvedVocal: ResolvedVocal) => {
-    const { dialoguePreset, voicePreset, speaker } = styleVoiceParts(resolvedVocal);
+    const { dialoguePreset, voicePreset, speaker, dialogueVocal } = styleVoiceParts(resolvedVocal);
     if (isDialogueGenre(compositionGenre)) {
-      // The preset's gender wins so the speaker and the gender direction never disagree.
-      const dialogueVocal = dialoguePreset?.vocal ?? (vocal === 'auto' ? 'male' : resolvedVocal);
-      const dialogueSpeaker = dialoguePreset?.speaker ?? speakerForVocal(dialogueVocal);
       return [
         'DIALOGUE_PUNCHLINE_DELIVERY',
-        `DIALOGUE_SPEAKER=${dialogueSpeaker}`,
+        `DIALOGUE_SPEAKER=${speaker}`,
         `DIALOGUE_VOCAL=${dialogueVocal}`,
         `DIALOGUE_TEMPO=${tempoBand(tempoSpeed)}`,
         `TEMPO_SPEED=${tempoSpeed}`,
@@ -810,6 +808,7 @@ export default function App() {
         `PAUSE_LEVEL=${pauseLevel}`,
         `DIALOGUE_CHARACTER=${dialogueCharacter}`,
         `DIALOGUE_LANGUAGE=${dialogueLanguage}`,
+        dialoguePreset ? `DIALOGUE_STYLE=${dialoguePreset.id}` : '',
         dialoguePreset?.prompt ?? '',
       ].filter(Boolean).join('\n');
     }
@@ -2133,7 +2132,7 @@ export default function App() {
                         Voice
                         <select value={vocal} onChange={(e) => {
                           setVocal(e.target.value as Vocal);
-                          setVoicePresetId('');
+                          if (!isDialogueGenre(compositionGenre)) setVoicePresetId('');
                         }}>
                           <option value="auto">Auto</option>
                           <option value="female">Female</option>
@@ -2145,7 +2144,7 @@ export default function App() {
                       <label>
                         Voice style
                         <select
-                          value={vocal === 'auto' ? '' : voicePresetId}
+                          value={vocal === 'auto' && !isDialogueGenre(compositionGenre) ? '' : voicePresetId}
                           onChange={(e) => setVoicePresetId(e.target.value)}
                           disabled={vocal === 'auto' && !isDialogueGenre(compositionGenre)}
                         >

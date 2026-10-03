@@ -33,12 +33,14 @@ function voiceParts(state: CompositionState, resolvedVocal: ResolvedVocal) {
   const dialoguePreset = isDialogueGenre(state.genre)
     ? DIALOGUE_VOICE_PRESETS.find((preset) => preset.id === state.voicePresetId)
     : undefined;
-  const voicePreset = isDialogueGenre(state.genre)
-    ? dialoguePreset
-    : state.vocal === 'auto'
-      ? undefined
-      : VOICE_PRESETS[state.vocal].find((preset) => preset.id === state.voicePresetId);
-  return { dialoguePreset, voicePreset, speaker: voicePreset?.speaker ?? speakerForVocal(resolvedVocal) };
+  const voicePreset = isDialogueGenre(state.genre) || state.vocal === 'auto'
+    ? undefined
+    : VOICE_PRESETS[state.vocal].find((preset) => preset.id === state.voicePresetId);
+  const dialogueVocal = state.vocal === 'auto' ? 'male' : state.vocal;
+  const speaker = isDialogueGenre(state.genre)
+    ? speakerForVocal(dialogueVocal)
+    : voicePreset?.speaker ?? speakerForVocal(resolvedVocal);
+  return { dialoguePreset, voicePreset, speaker, dialogueVocal };
 }
 
 export function resolveVocal(state: CompositionState, analysed: ResolvedVocal | undefined): ResolvedVocal {
@@ -50,10 +52,7 @@ export function buildAnalysisOptions(state: CompositionState): AnalysisOptions {
   const speech = isSpeechGenre(state.genre);
   const dialogue = isDialogueGenre(state.genre);
   return {
-    vocal: dialogue
-      ? DIALOGUE_VOICE_PRESETS.find((preset) => preset.id === state.voicePresetId)?.vocal
-        ?? (state.vocal === 'auto' ? 'male' : state.vocal)
-      : state.vocal,
+    vocal: dialogue && state.vocal === 'auto' ? 'male' : state.vocal,
     voiceStyleId: state.vocal === 'auto' && !dialogue ? undefined : state.voicePresetId || undefined,
     tempo: tempoBand(state.tempoSpeed),
     tempoSpeed: state.tempoSpeed,
@@ -91,14 +90,12 @@ export function buildProseStyle(state: CompositionState, baseStyle: string, reso
  * appended at generate time and are deliberately not shown as editable prose.
  */
 export function buildMachineStyleTags(state: CompositionState, resolvedVocal: ResolvedVocal): string {
-  const { dialoguePreset, voicePreset, speaker } = voiceParts(state, resolvedVocal);
+  const { dialoguePreset, voicePreset, speaker, dialogueVocal } = voiceParts(state, resolvedVocal);
 
   if (isDialogueGenre(state.genre)) {
-    // The preset's gender wins so the speaker and the gender direction never disagree.
-    const dialogueVocal = dialoguePreset?.vocal ?? (state.vocal === 'auto' ? 'male' : resolvedVocal);
     return [
       'DIALOGUE_PUNCHLINE_DELIVERY',
-      `DIALOGUE_SPEAKER=${dialoguePreset?.speaker ?? speakerForVocal(dialogueVocal)}`,
+      `DIALOGUE_SPEAKER=${speaker}`,
       `DIALOGUE_VOCAL=${dialogueVocal}`,
       `DIALOGUE_TEMPO=${tempoBand(state.tempoSpeed)}`,
       `TEMPO_SPEED=${state.tempoSpeed}`,
@@ -106,6 +103,7 @@ export function buildMachineStyleTags(state: CompositionState, resolvedVocal: Re
       `PAUSE_LEVEL=${state.pauseLevel}`,
       `DIALOGUE_CHARACTER=${state.dialogueCharacter}`,
       `DIALOGUE_LANGUAGE=${state.dialogueLanguage}`,
+      dialoguePreset ? `DIALOGUE_STYLE=${dialoguePreset.id}` : '',
       dialoguePreset?.prompt ?? '',
     ]
       .filter(Boolean)

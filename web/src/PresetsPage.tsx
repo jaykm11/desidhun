@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from './auth/AuthProvider';
 import { ApiError, listPresetSongs, type PresetCategory, type PresetSong } from './lib/api';
 import { PresetShareDialog } from './PresetDialogs';
+import { presetMatchesSearch } from './lib/presetTags';
 import { PRESET_CATEGORY_LABELS, PresetCard, togglePresetLike, usePresetPlayback } from './PresetSongs';
 
 const CATEGORIES: PresetCategory[] = ['songs', 'messages', 'reels'];
@@ -9,13 +10,16 @@ const CATEGORIES: PresetCategory[] = ['songs', 'messages', 'reels'];
 const EMPTY_TEXT: Record<PresetCategory, string> = {
   songs: 'No preset songs yet.',
   messages: 'No preset messages yet.',
-  reels: 'No preset reels yet.',
+  reels: 'No preset dialogues yet.',
 };
 
 function matches(preset: PresetSong, needle: string): boolean {
-  if (!needle) return true;
-  return [preset.title, preset.artistName, preset.lyricsExcerpt]
-    .some((field) => field.toLowerCase().includes(needle));
+  return presetMatchesSearch({
+    title: preset.title,
+    artistName: preset.artistName,
+    lyricsExcerpt: preset.lyricsExcerpt,
+    tags: [...(preset.tags ?? []), ...(preset.tagLabels ?? [])],
+  }, needle);
 }
 
 export default function PresetsPage() {
@@ -62,7 +66,7 @@ export default function PresetsPage() {
           <input
             type="search"
             className="preset-search"
-            placeholder="Search presets by title, artist, or words…"
+            placeholder="Search in Hindi or English…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             aria-label="Search presets"

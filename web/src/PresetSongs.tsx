@@ -7,7 +7,7 @@ import { ShareMenu } from './ShareButton';
 export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
   songs: 'Songs',
   messages: 'Messages',
-  reels: 'Reels',
+  reels: 'Dialogues',
 };
 
 function formatPlaybackTime(seconds: number): string {
@@ -138,6 +138,11 @@ export function PresetCard({
       <div className="community-song-copy">
         <strong>{preset.title}</strong>
         {showCategory && <span>{PRESET_CATEGORY_LABELS[preset.category]}</span>}
+        {(preset.tagLabels ?? []).length > 0 && (
+          <span className="preset-tags">
+            {preset.tagLabels.map((tag) => <span key={tag} className="preset-tag">{tag}</span>)}
+          </span>
+        )}
         {preset.lyricsExcerpt && <span className="preset-excerpt">{preset.lyricsExcerpt}</span>}
         {showCategory && preset.markedByEmail && (
           <span className="preset-meta">Marked by {preset.markedByEmail} · {new Date(preset.markedAt).toLocaleDateString()}</span>

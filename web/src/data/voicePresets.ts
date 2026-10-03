@@ -53,29 +53,55 @@ export const VOICE_PRESETS: Record<Exclude<Vocal, 'auto'>, readonly VoicePreset[
   ],
 };
 
-export interface DialogueVoicePreset extends VoicePreset {
-  vocal: Exclude<Vocal, 'auto'>;
+/** Reel delivery. The selected voice, character, and language choose who speaks; the style only sets the emotion. */
+export interface DialogueVoicePreset {
+  id: string;
+  label: string;
+  description: string;
+  prompt: string;
+}
+
+const ACT_THE_LINE = 'Act the provided script only. Do not translate, add words, or sing. Do not imitate any real person.';
+
+function dialogueStyle(id: string, label: string, description: string, direction: string): DialogueVoicePreset {
+  return { id: `dialogue-${id}`, label, description, prompt: `${direction} ${ACT_THE_LINE}` };
 }
 
 export const DIALOGUE_VOICE_PRESETS: readonly DialogueVoicePreset[] = [
-  { id: 'dialogue-film-punch-male', vocal: 'male', speaker: 'Fenrir', label: 'Film punchline', description: 'Pause, then land the line', prompt: 'Deliver this as a film punchline: hold a beat, then hit the last words with weight. Act the provided script only. Do not translate or invent lines. Do not read it like a narrator or audiobook.' },
-  { id: 'dialogue-hero-entry', vocal: 'male', speaker: 'Orus', label: 'Hero entry', description: 'Commanding and measured', prompt: 'Deliver this as a commanding hero entry line. Slow, sure, and larger than conversation. Act the provided script only. Do not translate or invent lines. Do not imitate any real actor.' },
-  { id: 'dialogue-villain', vocal: 'male', speaker: 'Charon', label: 'Villain taunt', description: 'Slow and cutting', prompt: 'Deliver this as a villain taunt: quiet threat, relish, and a sting on the last phrase. Act the provided script only. Do not translate or invent lines. Do not imitate any real actor.' },
-  { id: 'dialogue-comic-male', vocal: 'male', speaker: 'Puck', label: 'Comic timing', description: 'Setup and snap', prompt: 'Deliver this as a comic punchline: light setup, then a sharp snap. Act the provided script only. Do not translate or invent lines.' },
-  { id: 'dialogue-street', vocal: 'male', speaker: 'Puck', label: 'Street one-liner', description: 'Crisp and street-smart', prompt: 'Deliver this as a street-smart one-liner: dry, quick, and sure of itself. Act the provided script only. Do not translate or invent lines.' },
-  { id: 'dialogue-declaration', vocal: 'male', speaker: 'Fenrir', label: 'Declaration', description: 'Grand and final', prompt: 'Deliver this as a courtroom or climax declaration. Build, then land the last sentence like a verdict. Act the provided script only. Do not translate or invent lines.' },
-  { id: 'dialogue-film-punch-female', vocal: 'female', speaker: 'Kore', label: 'Film punchline', description: 'Pause, then land the line', prompt: 'Deliver this as a film punchline: hold a beat, then hit the last words with fire. Act the provided script only. Do not translate or invent lines. Do not read it like a narrator.' },
-  { id: 'dialogue-heroine', vocal: 'female', speaker: 'Zephyr', label: 'Heroine retort', description: 'Sharp and proud', prompt: 'Deliver this as a proud heroine retort: clear, cutting, and in control. Act the provided script only. Do not translate or invent lines. Do not imitate any real actress.' },
-  { id: 'dialogue-romance', vocal: 'female', speaker: 'Aoede', label: 'Romantic line', description: 'Intimate and loaded', prompt: 'Deliver this as a loaded romantic film line: close, warm, and emotionally charged. Act the provided script only. Do not translate or invent lines. Do not whisper-read.' },
-  { id: 'dialogue-comic-female', vocal: 'female', speaker: 'Callirrhoe', label: 'Comic timing', description: 'Setup and snap', prompt: 'Deliver this as a comic punchline: playful setup, then a bright snap. Act the provided script only. Do not translate or invent lines.' },
-  { id: 'dialogue-child-cute', vocal: 'child', speaker: 'Leda', label: 'Cute kid', description: 'Innocent and funny', prompt: 'Deliver this as a young child of about eight: innocent, curious, and unintentionally funny. Act the provided script only. Do not translate or invent lines.' },
-  { id: 'dialogue-child-sassy', vocal: 'child', speaker: 'Puck', label: 'Sassy kid', description: 'Cheeky comeback', prompt: 'Deliver this as a cheeky young child of about eight with a sassy comeback. Act the provided script only. Do not translate or invent lines.' },
-  { id: 'dialogue-duet-exchange', vocal: 'duet', speaker: 'Fenrir', label: 'Face-off line', description: 'Two-person tension, one voice', prompt: 'Deliver this as a face-off dialogue line: tense, pointed, and meant for someone standing opposite you. Act the provided script only. Do not translate or invent lines.' },
+  dialogueStyle('angry', 'Angry', 'Heat under control', 'Deliver this angrily: clipped, heated, and holding the fury in. Hit the last words harder.'),
+  dialogueStyle('romantic', 'Romantic', 'Close and loaded', 'Deliver this as a romantic line: close, warm, and emotionally charged. Do not whisper-read.'),
+  dialogueStyle('sad', 'Sad', 'Heavy and quiet', 'Deliver this sadly: heavy, quiet, and almost breaking. Do not add sobs or extra words.'),
+  dialogueStyle('scared', 'Scared', 'Breath caught', 'Deliver this as frightened: unsteady, breath caught, still saying every word.'),
+  dialogueStyle('excited', 'Excited', 'Bright lift', 'Deliver this excitedly: bright, quick, and delighted, with a lift into the last phrase.'),
+  dialogueStyle('calm', 'Calm', 'Steady and low', 'Deliver this calmly: steady, low, and unhurried.'),
+  dialogueStyle('whisper', 'Whisper', 'Close and quiet', 'Deliver this in a clear whisper: close and quiet, every word still understandable.'),
+  dialogueStyle('sarcastic', 'Sarcastic', 'Dry twist', 'Deliver this sarcastically: dry, pointed, with a twist on the last phrase.'),
+  dialogueStyle('tender', 'Tender', 'Soft and careful', 'Deliver this tenderly: soft, affectionate, and careful.'),
+  dialogueStyle('menacing', 'Menacing', 'Cold threat', 'Deliver this menacingly: slow, cold, with threat under the words and a sting on the last phrase.'),
+  dialogueStyle('shouting', 'Shouting', 'Raised and clear', 'Deliver this as a shout: raised and urgent, still intelligible. Do not add screams or extra words.'),
+  dialogueStyle('cold', 'Cold', 'Flat and distant', 'Deliver this coldly: flat, distant, and unsmiling.'),
+  dialogueStyle('hopeful', 'Hopeful', 'Open and lifting', 'Deliver this hopefully: open, lifting, believing the last line.'),
+  dialogueStyle('desperate', 'Desperate', 'Urgent plea', 'Deliver this desperately: an urgent plea, strained, without adding words.'),
+  dialogueStyle('playful', 'Playful', 'Teasing grin', 'Deliver this playfully: light, teasing, with a grin in the voice.'),
+  dialogueStyle('comic', 'Comic', 'Setup and snap', 'Deliver this as a comic punchline: light setup, then a sharp snap.'),
+  dialogueStyle('film-punch', 'Film punchline', 'Pause, then land it', 'Deliver this as a film punchline: hold a beat, then land the last words. Do not read it like a narrator.'),
+  dialogueStyle('hero-entry', 'Hero entry', 'Commanding and measured', 'Deliver this as a commanding hero entry: slow, sure, and larger than conversation.'),
+  dialogueStyle('villain', 'Villain taunt', 'Slow and cutting', 'Deliver this as a villain taunt: quiet threat, relish, and a sting on the last phrase.'),
+  dialogueStyle('street', 'Street one-liner', 'Crisp and sure', 'Deliver this as a street-smart one-liner: dry, quick, and sure of itself.'),
+  dialogueStyle('declaration', 'Declaration', 'Grand and final', 'Deliver this as a climax declaration: build, then land the last sentence like a verdict.'),
+  dialogueStyle('face-off', 'Face-off', 'Pointed tension', 'Deliver this as a face-off line: tense, pointed, and meant for someone standing opposite you.'),
+  dialogueStyle('sassy', 'Sassy', 'Cheeky comeback', 'Deliver this as a sassy comeback: cheeky, quick, and pleased with itself.'),
+  dialogueStyle('cute', 'Cute', 'Innocent and funny', 'Deliver this cutely: innocent, warm, and unintentionally funny.'),
 ];
 
-export function dialoguePresetsFor(vocal: Vocal): readonly DialogueVoicePreset[] {
-  if (vocal === 'auto') return DIALOGUE_VOICE_PRESETS;
-  return DIALOGUE_VOICE_PRESETS.filter((preset) => preset.vocal === vocal);
+/** Every reel style is available for every voice, character, and language. */
+export function dialoguePresetsFor(_vocal?: Vocal): readonly DialogueVoicePreset[] {
+  return DIALOGUE_VOICE_PRESETS;
+}
+
+export function dialogueStyleById(id: string | undefined): DialogueVoicePreset | undefined {
+  if (!id) return undefined;
+  return DIALOGUE_VOICE_PRESETS.find((preset) => preset.id === id);
 }
 
 export function speakerForVocal(vocal: Exclude<Vocal, 'auto'>): string {

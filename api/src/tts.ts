@@ -1,6 +1,7 @@
 import { GoogleAuth } from 'google-auth-library';
 import { transcribeGeneratedSpeech } from './gemini';
 import { DIALOGUE_LANGUAGES, type DialogueLanguageOption } from '../../web/src/data/speechOptions';
+import { dialogueStyleById } from '../../web/src/data/voicePresets';
 import { clampTempoSpeed, tempoBand, tempoSpeakingRate } from '../../web/src/data/tempo';
 import {
   clampPauseLevel,
@@ -19,6 +20,11 @@ const GEMINI_TTS_MODELS = [
   'gemini-3.1-flash-tts-preview',
   'gemini-2.5-pro-tts',
 ];
+const COMIC_TTS_MODELS = [
+  'gemini-2.5-pro-tts',
+  'gemini-2.5-flash-tts',
+  'gemini-3.1-flash-tts-preview',
+];
 
 const DIALOGUE_PROMPT = `You are a voice actor performing a fixed script.
 Speak ONLY the exact words in the input text.
@@ -35,9 +41,9 @@ type DialogueCharacter = 'hero' | 'villain' | 'comedian';
 type SpokenMediaType = 'news' | 'documentary' | 'youtube-reels' | 'podcast';
 
 const DIALOGUE_CHARACTER_PROMPT: Record<DialogueCharacter, string> = {
-  hero: 'Delivery character is the Hero: commanding and righteous. Keep the script wording unchanged.',
-  villain: 'Delivery character is the Villain: quiet threat with a sting on the last phrase. Keep the script wording unchanged.',
-  comedian: 'Delivery character is the Comedian: light setup, sharp landing. Keep the script wording unchanged.',
+  hero: 'Character is the Hero. Keep that role, and let the selected voice style set the emotion. Keep the script wording unchanged.',
+  villain: 'Character is the Villain. Keep that role, and let the selected voice style set the emotion. Keep the script wording unchanged.',
+  comedian: 'Character is the Comedian. Keep that role, and let the selected voice style set the emotion. Keep the script wording unchanged.',
 };
 
 const SPOKEN_MEDIA_PACE: Record<SpokenMediaType, { speakingRate: number; prompt: string }> = {
@@ -180,7 +186,7 @@ function genderDirection(style: string): string {
   if (vocal === 'female') return 'The speaking voice must be clearly female.';
   if (vocal === 'male') return 'The speaking voice must be clearly male.';
   if (vocal === 'duet') return 'Use a blended two-person spoken delivery.';
-  if (vocal === 'child') return 'The speaking voice must sound like a young child of about eight: high, light, innocent, and playful.';
+  if (vocal === 'child') return 'The speaking voice must sound like a young child of about eight: high and light. Keep the selected voice style.';
   return '';
 }
 
@@ -191,6 +197,13 @@ function isDialogueRequest(style: string): boolean {
 function characterFromStyle(style: string): DialogueCharacter {
   const match = style.match(/DIALOGUE_CHARACTER=(hero|villain|comedian)/);
   return (match?.[1] as DialogueCharacter) ?? 'hero';
+}
+
+function dialogueStyleDirection(style: string): string {
+  const id = style.match(/DIALOGUE_STYLE=([a-z0-9-]+)/)?.[1];
+  const preset = dialogueStyleById(id);
+  if (!preset) return '';
+  return `Voice style is ${preset.label}. ${preset.prompt}`;
 }
 
 function mediaFromStyle(style: string): SpokenMediaType | undefined {
@@ -297,6 +310,7 @@ function dialoguePrompt(style: string, tempo: DialogueTempo): string {
     .replace(/PAUSE_LEVEL=\d+/g, '')
     .replace(/DIALOGUE_CHARACTER=(hero|villain|comedian)/g, '')
     .replace(/DIALOGUE_LANGUAGE=[a-z-]+/g, '')
+    .replace(/DIALOGUE_STYLE=[a-z0-9-]+/g, '')
     .replace(/original [\w\s]*film dialogue[\s\S]*$/i, '')
     .replace(/Perform this as[\s\S]*$/i, '')
     .replace(/Voice tone:[^\n]*/gi, '')
@@ -308,10 +322,13 @@ function dialoguePrompt(style: string, tempo: DialogueTempo): string {
   const language = dialogueLanguageFromStyle(style);
   const gender = genderDirection(style);
   const tone = voiceToneFromStyle(style);
+  const voiceStyle = dialogueStyleDirection(style);
   return [
     DIALOGUE_PROMPT,
     'CRITICAL: Speak the input text verbatim. Never invent a different dialogue.',
     language && `Performance tradition: ${language.prompt}. Speak with a native ${language.name} accent. Keep the script wording unchanged.`,
+    voiceStyle,
+    voiceStyle && 'Apply this voice style for the selected voice, character, and language.',
     character,
     gender,
     pace,
@@ -608,6 +625,31 @@ export async function generateSpokenNarration(
   return { audio, notes: `Spoken narration generated with Chirp 3 HD (${voice.languageCode}, pause ${pauseLevel}).` };
 }
 
+function isComicGemini(style: string): boolean {
+  return style.includes('COMIC_GEMINI_TTS');
+}
+
+/** Director's note for short comic messages. The model performs the script; it must not read this aloud. */
+function livelyComicPrompt(style: string, text: string): string {
+  const vocal = vocalFromStyle(style);
+  const character = vocal === 'female'
+    ? 'You are a bright, mischievous adult woman. Smile in the voice. Lift the setup, then land the last phrase with a cheeky snap.'
+    : vocal === 'child'
+      ? 'You are a playful child of about eight, delighted by your own joke. Light, bouncy, and full of mischief.'
+      : 'You are a warm adult man. Start dry and amused, then break into a grin and snap the last phrase.';
+  const language = containsDevanagari(text)
+    ? 'The script is Hindi. Speak Hindi with a native accent.'
+    : 'The script is English. Speak English with a natural Indian accent.';
+  return [
+    'Perform this as a lively voice note to a friend. Do not read it like an announcement, news report, or audiobook.',
+    character,
+    'Sound dynamic and characterful. Vary pitch, pace, and energy from phrase to phrase. Stay warm, never mean.',
+    language,
+    genderDirection(style),
+    'Speak only the exact words in the text, once. Do not add words, laughter, greetings, or translations. Do not sing.',
+  ].filter(Boolean).join('\n');
+}
+
 function spokenMediaPrompt(style: string, media: SpokenMediaType, includeGender: boolean) {
   const pace = SPOKEN_MEDIA_PACE[media];
   const extra = style
@@ -619,6 +661,7 @@ function spokenMediaPrompt(style: string, media: SpokenMediaType, includeGender:
     .replace(/VOICE_PITCH=\d+/g, '')
     .replace(/VOICE_BASS=\d+/g, '')
     .replace(/PAUSE_LEVEL=\d+/g, '')
+    .replace(/COMIC_GEMINI_TTS/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   const tone = voiceToneFromStyle(style);
@@ -645,6 +688,23 @@ async function generateSpokenMediaAudio(
   const audioConfig = audioConfigFromStyle(style, speakingRate);
   const voice = chirpVoiceFor(text, speaker);
   let lastError: Error | undefined;
+
+  if (isComicGemini(style)) {
+    const comicPrompt = livelyComicPrompt(style, text);
+    for (const modelName of COMIC_TTS_MODELS) {
+      try {
+        const audio = await synthesizeVerbatim({
+          input: { text, prompt: comicPrompt },
+          voice: { languageCode, name: speaker, modelName },
+          audioConfig,
+        }, text, modelName);
+        return { audio, notes: `Lively comic line generated with ${modelName} (${languageCode}, ${speaker}).` };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Gemini-TTS could not perform this comic line.');
+      }
+    }
+    throw lastError ?? new Error('Gemini-TTS could not perform this comic line.');
+  }
 
   const tryChirp = async (): Promise<{ audio: Buffer; notes: string } | undefined> => {
     try {

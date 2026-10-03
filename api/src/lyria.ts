@@ -3,6 +3,7 @@ import { GoogleAuth } from 'google-auth-library';
 // lyria-3.5 is only served by the Gemini API, which authenticates with an API key.
 // Vertex serves lyria-3-pro-preview under the caller's service account.
 const GEMINI_LYRIA_MODEL = process.env.LYRIA_MODEL || 'lyria-3.5';
+const SHORT_CLIP_MODEL = 'lyria-3-clip-preview';
 const VERTEX_LYRIA_MODEL = 'lyria-3-pro-preview';
 
 interface InteractionOutput {
@@ -195,14 +196,24 @@ async function generateViaContent(prompt: string, token: string, model: string):
   return { audio: parsed.audio, notes: parsed.notes };
 }
 
+/** Styles marked this way stay on the 30-second clip model, including preset personalization. */
+function isShortSong(style: string): boolean {
+  return /30-second song/i.test(style);
+}
+
 export async function generateSongWithLyria(style: string, lyrics: string): Promise<{ audio: Buffer; notes: string }> {
   const prompt = buildPrompt(style, lyrics);
   let lastError: Error | undefined;
-  const attempts = [
-    () => generateViaGeminiApi(prompt, GEMINI_LYRIA_MODEL),
-    async () => generateViaInteractions(prompt, await accessToken(), VERTEX_LYRIA_MODEL),
-    async () => generateViaContent(prompt, await accessToken(), VERTEX_LYRIA_MODEL),
-  ];
+  const attempts = isShortSong(style)
+    ? [
+        () => generateViaGeminiApi(prompt, SHORT_CLIP_MODEL),
+        () => generateViaGeminiApi(prompt, SHORT_CLIP_MODEL),
+      ]
+    : [
+        () => generateViaGeminiApi(prompt, GEMINI_LYRIA_MODEL),
+        async () => generateViaInteractions(prompt, await accessToken(), VERTEX_LYRIA_MODEL),
+        async () => generateViaContent(prompt, await accessToken(), VERTEX_LYRIA_MODEL),
+      ];
   for (const attempt of attempts) {
     try {
       return await attempt();

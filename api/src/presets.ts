@@ -2,6 +2,7 @@ import { FieldValue, Timestamp, type Firestore } from 'firebase-admin/firestore'
 import type { CoverTheme } from '../../web/src/lib/songIdentity';
 import { resolveCoverTheme } from '../../web/src/lib/songIdentity';
 import { presetSegments, sanitizeFieldTokens } from '../../web/src/lib/presetFields';
+import { presetMatchesSearch, presetTagSet } from '../../web/src/lib/presetTags';
 
 export const PRESET_SONGS = 'presetSongs';
 
@@ -16,6 +17,8 @@ export interface PresetSong {
   markedByEmail: string | null;
   markedAt: string;
   lyricsExcerpt: string;
+  tagLabels: string[];
+  tags: string[];
   likeCount: number;
   liked: boolean;
   fieldCount: number;
@@ -46,10 +49,25 @@ function artistNameFrom(displayName: unknown, email: unknown): string {
   return 'Desi Dhun artist';
 }
 
+function storedStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '').map((item) => item.trim());
+}
+
+function tagsFor(title: string, lyrics: string, data: { [field: string]: unknown }): { tagLabels: string[]; tags: string[] } {
+  const storedTags = storedStrings(data.tags);
+  const storedLabels = storedStrings(data.tagLabels);
+  if (storedTags.length > 0) {
+    return { tagLabels: storedLabels.length > 0 ? storedLabels : storedTags.slice(0, 2), tags: storedTags };
+  }
+  return presetTagSet(title, lyrics);
+}
+
 function serializePreset(id: string, data: { [field: string]: unknown }, liked = false): PresetSong {
   const title = typeof data.title === 'string' && data.title.trim() ? data.title : 'Untitled';
   const lyrics = typeof data.lyrics === 'string' ? data.lyrics : '';
   const category = data.category === 'messages' || data.category === 'reels' ? data.category : 'songs';
+  const tags = tagsFor(title, lyrics, data);
   return {
     id,
     title,
@@ -59,6 +77,8 @@ function serializePreset(id: string, data: { [field: string]: unknown }, liked =
     markedByEmail: typeof data.markedByEmail === 'string' ? data.markedByEmail : null,
     markedAt: asIso(data.markedAt),
     lyricsExcerpt: lyrics.replace(/\[(?:male|female|child)\]/gi, '').replace(/\s+/g, ' ').trim().slice(0, 160),
+    tagLabels: tags.tagLabels,
+    tags: tags.tags,
     likeCount: typeof data.likeCount === 'number' && data.likeCount > 0 ? Math.floor(data.likeCount) : 0,
     liked,
     fieldCount: presetSegments(lyrics, sanitizeFieldTokens(lyrics, data.fieldTokens))
@@ -88,6 +108,7 @@ export async function markPresetSong(
   const title = typeof song.title === 'string' && song.title.trim() ? song.title.trim() : 'Untitled';
   const style = typeof song.style === 'string' ? song.style : '';
   const lyrics = typeof song.lyrics === 'string' ? song.lyrics : '';
+  const tags = presetTagSet(title, lyrics);
   const existing = (await db.collection(PRESET_SONGS).doc(songId).get()).data();
   const existingCategory = existing?.category;
   const record = {
@@ -102,6 +123,8 @@ export async function markPresetSong(
     coverTheme: resolveCoverTheme(song.coverTheme, title, style, lyrics),
     artistName: artistNameFrom(owner.displayName, owner.email),
     artistEmail: owner.email ?? null,
+    tagLabels: tags.tagLabels,
+    tags: tags.tags,
     gcsPath,
     markedByUid: admin.uid,
     markedByEmail: admin.email,
@@ -130,8 +153,11 @@ export async function unmarkPresetSong(db: Firestore, songId: string): Promise<v
 
 export async function renamePresetSong(db: Firestore, songId: string, title: string): Promise<void> {
   const ref = db.collection(PRESET_SONGS).doc(songId);
-  if (!(await ref.get()).exists) return;
-  await ref.set({ title, titleLower: title.toLowerCase() }, { merge: true });
+  const snapshot = await ref.get();
+  if (!snapshot.exists) return;
+  const lyrics = typeof snapshot.data()?.lyrics === 'string' ? snapshot.data()!.lyrics as string : '';
+  const tags = presetTagSet(title, lyrics);
+  await ref.set({ title, titleLower: title.toLowerCase(), tagLabels: tags.tagLabels, tags: tags.tags }, { merge: true });
 }
 
 export async function listPresetSongs(db: Firestore, viewerUid: string, search = ''): Promise<PresetSong[]> {
@@ -140,13 +166,18 @@ export async function listPresetSongs(db: Firestore, viewerUid: string, search =
     presetLikesRef(db, viewerUid).select().get(),
   ]);
   const likedIds = new Set(likes.docs.map((doc) => doc.id));
-  const needle = search.trim().toLowerCase();
   return snapshot.docs
     .filter((doc) => {
-      if (!needle) return true;
       const data = doc.data();
-      return [data.title, data.lyrics, data.artistName, data.markedByEmail]
-        .some((field) => typeof field === 'string' && field.toLowerCase().includes(needle));
+      const title = typeof data.title === 'string' ? data.title : '';
+      const lyrics = typeof data.lyrics === 'string' ? data.lyrics : '';
+      const tags = tagsFor(title, lyrics, data);
+      return presetMatchesSearch({
+        title,
+        artistName: typeof data.artistName === 'string' ? data.artistName : '',
+        lyrics,
+        tags: [...tags.tags, ...(typeof data.markedByEmail === 'string' ? [data.markedByEmail] : [])],
+      }, search);
     })
     .map((doc) => serializePreset(doc.id, doc.data(), likedIds.has(doc.id)));
 }

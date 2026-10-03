@@ -428,6 +428,8 @@ export interface PresetSong {
   markedByEmail: string | null;
   markedAt: string;
   lyricsExcerpt: string;
+  tagLabels: string[];
+  tags: string[];
   likeCount: number;
   liked: boolean;
   fieldCount: number;
