@@ -8,7 +8,7 @@ COPY web/src ./web/src
 COPY api ./api
 RUN cd api && npm run build
 
-FROM node:22-slim
+FROM node:22-slim AS production
 
 WORKDIR /app
 ENV NODE_ENV=production
@@ -20,3 +20,14 @@ COPY web/public/covers ./public/covers
 
 EXPOSE 8080
 CMD ["node", "api/dist/index.mjs"]
+
+FROM node:22-slim AS development
+
+WORKDIR /app/api
+COPY api/package*.json ./
+RUN npm ci
+COPY api ./
+COPY web/src /app/web/src
+
+EXPOSE 8080
+CMD ["npm", "run", "dev:development"]

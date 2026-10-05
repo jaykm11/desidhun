@@ -34,5 +34,6 @@ Docs worth reading before changing infra: [web/README.md](web/README.md), [web/d
 - `api/` has no `node_modules` checked out by default; run `cd api && npm install` before `npm run typecheck`.
 - API builds use the repository root as Docker context because the bundle imports shared modules from `web/src`; run `gcloud builds submit ...` from the repository root.
 - Firebase auth uses same-site auth domains for `desidhun.net` / `desidhun.web.app` ([web/src/lib/firebase.ts](web/src/lib/firebase.ts)); changing the auth domain requires updating authorised OAuth redirect URIs.
+- Production client API origins must use HTTPS. `VITE_API_BASE_URL` and `EXPO_PUBLIC_API_BASE_URL` are baked into public builds, and authenticated API requests carry Firebase ID tokens; never ship clients pointed at an HTTP IP endpoint. Use the Cloud Run or custom-domain HTTPS origin.
 - Credit/quota changes must stay inside the Firestore transactions in [api/src/index.ts](api/src/index.ts) — a non-transactional decrement is a paid-feature bypass.
 - Webhook routes (`/v1/webhooks/stripe`, `/v1/webhooks/payu`) use raw/urlencoded body parsers for signature verification; don't move them under the global JSON parser.

@@ -17,6 +17,53 @@ cd ../web && npm install
 cd ../mobile && npm install
 ```
 
+## Docker Compose
+
+Install Docker Desktop with Compose v2, then copy each app's environment
+template to `.env.development` and fill in the Firebase/API settings. The API
+also needs valid local credentials for Google Cloud; run
+`gcloud auth application-default login` before starting the local stack.
+
+```bash
+cp api/.env.example api/.env.development
+cp web/.env.example web/.env.development
+cp mobile/.env.example mobile/.env.development
+```
+
+Start all three apps in one of these modes from the repository root:
+
+```bash
+# Local: live source mounts and hot reload
+docker compose -f compose.yaml -f compose.local.yaml up --build
+
+# Dev: development processes from the source captured in the images
+docker compose up --build
+
+# Production-mode smoke test: optimized API, static web bundle, and Expo bundle
+APP_ENV=production docker compose --env-file mobile/.env.production \
+	-f compose.yaml -f compose.production.yaml up --build
+```
+
+Create the matching `.env.production` files from the templates before using
+production mode. The web production image embeds values from
+`web/.env.production`; client API origins must be HTTPS for public deployment.
+The production Compose mode is a local smoke-test stack, not a replacement for
+Cloud Run, Firebase Hosting, or EAS distribution. The mobile container serves
+an optimized Expo bundle; shipping native iOS/Android apps still uses EAS.
+
+The web app is at `http://localhost:5173`, the API at
+`http://localhost:8080`, and Expo Metro at `http://localhost:8081`. For a
+physical phone, set `MOBILE_API_BASE_URL` and `EXPO_PACKAGER_HOSTNAME` to your
+computer's LAN IP before starting the local stack, for example:
+
+```bash
+MOBILE_API_BASE_URL=http://192.168.1.20:8080 \
+EXPO_PACKAGER_HOSTNAME=192.168.1.20 \
+docker compose -f compose.yaml -f compose.local.yaml up --build
+```
+
+Stop the stack with `Ctrl+C`; use `docker compose down` to remove its containers.
+
 ## Development
 
 ### API

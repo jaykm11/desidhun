@@ -1,0 +1,44 @@
+name: desi-dhun
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: development
+    env_file:
+      - ./api/.env.${APP_ENV:-development}
+    environment:
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: development
+    env_file:
+      - ./web/.env.${APP_ENV:-development}
+    environment:
+      VITE_API_BASE_URL: ${WEB_API_BASE_URL:-http://localhost:8080}
+      API_PROXY_TARGET: http://api:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+  mobile:
+    build:
+      context: .
+      dockerfile: mobile/Dockerfile
+      target: development
+    env_file:
+      - ./mobile/.env.${APP_ENV:-development}
+    environment:
+      EXPO_PUBLIC_API_BASE_URL: ${MOBILE_API_BASE_URL:-${EXPO_PUBLIC_API_BASE_URL:-http://localhost:8080}}
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${EXPO_PACKAGER_HOSTNAME:-localhost}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - api
