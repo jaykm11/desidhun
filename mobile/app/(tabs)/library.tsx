@@ -154,9 +154,7 @@ export default function LibraryScreen() {
           const failed = item.status === 'failed';
           const isCurrent = player.trackId === item.id;
           return (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push(`/song/${item.id}`)}
+            <View
               style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: spacing.md }]}
             >
               <Pressable
@@ -181,12 +179,17 @@ export default function LibraryScreen() {
                 />
               </Pressable>
 
-              <View style={{ flex: 1, gap: 2 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${displaySongTitle(item.title)}`}
+                onPress={() => router.push(`/song/${item.id}`)}
+                style={{ flex: 1, gap: 2 }}
+              >
                 <Text numberOfLines={1} style={{ ...typography.subheading, color: colors.text }}>
                   {displaySongTitle(item.title)}
                 </Text>
                 <Caption>{statusLabel(item)}</Caption>
-              </View>
+              </Pressable>
 
               <IconButton
                 icon={item.visibility === 'public' ? 'globe' : 'lock-closed'}
@@ -201,7 +204,7 @@ export default function LibraryScreen() {
                 onPress={() => void share(item)}
               />
               <IconButton icon="trash-outline" label="Delete" tint={colors.danger} onPress={() => remove(item)} />
-            </Pressable>
+            </View>
           );
         }}
       />

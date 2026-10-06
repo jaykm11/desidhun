@@ -1,0 +1,23 @@
+services:
+  api:
+    volumes:
+      - ./api:/app/api
+      - ./web/src:/app/web/src:ro
+      - api_node_modules:/app/api/node_modules
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+
+  web:
+    volumes:
+      - ./web:/app/web
+      - web_node_modules:/app/web/node_modules
+
+  mobile:
+    volumes:
+      - ./mobile:/workspace/mobile
+      - ./web/src:/workspace/web/src:ro
+      - mobile_node_modules:/workspace/mobile/node_modules
+
+volumes:
+  api_node_modules:
+  web_node_modules:
+  mobile_node_modules:

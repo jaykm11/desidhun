@@ -1,0 +1,14 @@
+services:
+  api:
+    build:
+      target: production
+
+  web:
+    build:
+      target: production
+    ports:
+      - "5173:80"
+
+  mobile:
+    build:
+      target: production
