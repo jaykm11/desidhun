@@ -290,8 +290,15 @@ export function generateLyriaSong(
   });
 }
 
-export function listLibrarySongs(user: User) {
-  return apiFetch<{ songs: LibrarySong[] }>(user, '/api/v1/songs');
+export function listLibrarySongs(user: User, page?: { limit?: number; cursor?: string | null }) {
+  const params = new URLSearchParams();
+  if (page?.limit) params.set('limit', String(page.limit));
+  if (page?.cursor) params.set('cursor', page.cursor);
+  const query = params.toString();
+  return apiFetch<{ songs: LibrarySong[]; nextCursor?: string | null }>(
+    user,
+    `/api/v1/songs${query ? `?${query}` : ''}`,
+  );
 }
 
 export function deleteLibrarySong(user: User, songId: string) {

@@ -2,7 +2,7 @@ import { useAuth } from './auth/AuthProvider';
 import { useIsAdmin } from './lib/useIsAdmin';
 
 const TABS = [
-  { id: 'generate', label: 'Generate', href: '/' },
+  { id: 'generate', label: 'Studio', href: '/' },
   { id: 'explore', label: 'Explore', href: '/explore' },
   { id: 'presets', label: 'Presets', href: '/presets' },
   { id: 'membership', label: 'Membership', href: '/membership' },

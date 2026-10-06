@@ -1753,9 +1753,10 @@ body {
 .composition-kind-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
+  gap: 14px;
+  margin: 4px 0 8px;
   max-width: 100%;
+  perspective: 600px;
 }
 
 .lyrics-mode-buttons {
@@ -1808,7 +1809,49 @@ body {
 }
 
 .composition-kind-buttons .mode-icon-btn {
-  min-width: 6.6rem;
+  min-width: 8.4rem;
+  min-height: 3.5rem;
+  padding: 12px 18px;
+  color: #f6e7c4;
+  background: linear-gradient(180deg, #4a3816 0%, #1c150c 100%);
+  border: 1px solid rgba(255, 224, 160, 0.5);
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 196, 0.55),
+    0 6px 0 #5a3d0e,
+    0 10px 16px rgba(0, 0, 0, 0.42);
+  transform: translateY(0);
+}
+
+.composition-kind-buttons .mode-icon-btn-glyph {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.composition-kind-buttons .mode-icon-btn:hover:not(:disabled) {
+  color: #fff8e8;
+  border-color: rgba(255, 224, 160, 0.8);
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 196, 0.7),
+    0 9px 0 #5a3d0e,
+    0 14px 20px rgba(0, 0, 0, 0.48);
+}
+
+.composition-kind-buttons .mode-icon-btn:active:not(:disabled),
+.composition-kind-buttons .mode-icon-btn.active,
+.composition-kind-buttons .mode-icon-btn.active:hover {
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffe7ad 0%, #d6a441 52%, #a8741c 100%);
+  border-color: #f0d48a;
+  transform: translateY(5px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 230, 0.85),
+    0 1px 0 #6a4a12,
+    0 3px 8px rgba(0, 0, 0, 0.35);
 }
 
 .lyrics-mode-buttons .mode-icon-btn {
@@ -4184,6 +4227,88 @@ textarea:disabled {
 
 .song-library-audio-engine {
   display: none;
+}
+
+.song-library-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.song-library-pager button {
+  padding: 6px 12px;
+  color: #1a1206;
+  background: var(--gold);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.song-library-pager button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.song-library-pager span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.app-shell.has-player {
+  padding-bottom: 84px;
+}
+
+.persistent-player {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(12, 9, 22, 0.96);
+  border-top: 1px solid rgba(214, 164, 65, 0.45);
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.4);
+}
+
+.persistent-player-art {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.persistent-player-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.persistent-player-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persistent-player-toggle {
+  padding: 8px 14px;
+  color: #1a1206;
+  background: var(--gold);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .song-delete-btn {

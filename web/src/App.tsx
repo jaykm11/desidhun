@@ -60,6 +60,7 @@ import type { AnalysisOptions, AnalysisResult, DialogueCharacter, DialogueLangua
 import { coverImageForTheme, resolveCoverTheme } from './lib/songIdentity';
 import { analyzeLyrics } from './lib/analyze';
 import { useIsAdmin } from './lib/useIsAdmin';
+import { useLibraryPlayer } from './LibraryPlayer';
 import { LoginTopSongs } from './LoginTopSongs';
 import { displaySongTitle, songNameFromLyrics } from './lib/songName';
 import { loadGoogleIdentityServices } from './lib/youtube';
@@ -83,6 +84,7 @@ const SONG_IMAGE_STATUS_STEPS = ['Starting', 'Composing', 'Mixing'];
 
 const VOICE_TAGS = ['Male', 'Female', 'Child'] as const;
 const VOICE_TAG_MIME = 'application/x-desidhun-voice-tag';
+const LIBRARY_PAGE_SIZE = 7;
 
 /** Puts every [Male] / [Female] / [Child] tag on its own line so the text after it belongs to that voice. */
 function normalizeVoiceTags(text: string): string {
@@ -341,14 +343,12 @@ export default function App() {
   const [recordedLyricsLanguage, setRecordedLyricsLanguage] = useState<'hindi' | 'english' | null>(null);
   const [lyricsImage, setLyricsImage] = useState<{ name: string; data: string; mimeType: 'image/jpeg' | 'image/png' } | null>(null);
   const [isGeneratingSong, setIsGeneratingSong] = useState(false);
+  const player = useLibraryPlayer();
   const [librarySongs, setLibrarySongs] = useState<LibrarySong[]>([]);
   const [libraryMinRating, setLibraryMinRating] = useState(0);
-  const [currentLibrarySong, setCurrentLibrarySong] = useState<LibrarySong | null>(null);
-  const [currentSongUrl, setCurrentSongUrl] = useState<string | null>(null);
-  const [isLibrarySongPlaying, setIsLibrarySongPlaying] = useState(false);
-  const [libraryPlaybackProgress, setLibraryPlaybackProgress] = useState(0);
-  const [libraryPlaybackDuration, setLibraryPlaybackDuration] = useState(0);
-  const libraryAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [libraryPage, setLibraryPage] = useState(0);
+  const [libraryCursors, setLibraryCursors] = useState<(string | null)[]>([null]);
+  const [libraryNextCursor, setLibraryNextCursor] = useState<string | null>(null);
   const [songError, setSongError] = useState<string | null>(null);
   const [variationSourceSong, setVariationSourceSong] = useState<LibrarySong | null>(null);
   const [openSongMenuId, setOpenSongMenuId] = useState<string | null>(null);
@@ -431,16 +431,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    setLibraryPage(0);
+    setLibraryCursors([null]);
+    setLibraryNextCursor(null);
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user) {
       setLibrarySongs([]);
       setIsGeneratingSong(false);
       return;
     }
     let cancelled = false;
-    const loadTimer = window.setTimeout(() => void listLibrarySongs(user)
-      .then(async ({ songs }) => {
+    const cursor = libraryCursors[libraryPage] ?? null;
+    const loadTimer = window.setTimeout(() => void listLibrarySongs(user, { limit: LIBRARY_PAGE_SIZE, cursor })
+      .then(({ songs, nextCursor }) => {
         if (cancelled) return;
         setLibrarySongs(songs);
+        setLibraryNextCursor(nextCursor ?? null);
       })
       .catch(() => {
         if (!cancelled) setLibrarySongs([]);
@@ -449,7 +457,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(loadTimer);
     };
-  }, [user]);
+  }, [user, libraryPage, libraryCursors]);
 
   const hasPendingSongs = librarySongs.some(songIsPending);
 
@@ -461,10 +469,13 @@ export default function App() {
 
     setIsGeneratingSong(true);
     let cancelled = false;
+    const cursor = libraryCursors[libraryPage] ?? null;
     const refresh = () => {
-      void listLibrarySongs(user)
-        .then(({ songs }) => {
-          if (!cancelled) setLibrarySongs(songs);
+      void listLibrarySongs(user, { limit: LIBRARY_PAGE_SIZE, cursor })
+        .then(({ songs, nextCursor }) => {
+          if (cancelled) return;
+          setLibrarySongs(songs);
+          setLibraryNextCursor(nextCursor ?? null);
         })
         .catch(() => undefined);
     };
@@ -473,13 +484,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [user, hasPendingSongs]);
-
-  useEffect(() => {
-    return () => {
-      if (currentSongUrl) URL.revokeObjectURL(currentSongUrl);
-    };
-  }, [currentSongUrl]);
+  }, [user, hasPendingSongs, libraryPage, libraryCursors]);
 
   useEffect(() => {
     if (!isGeneratingSong) {
@@ -1233,47 +1238,15 @@ export default function App() {
     }
   };
 
-  const playLibrarySong = async (song: LibrarySong) => {
+  const toggleLibrarySongPlayback = async (song: LibrarySong) => {
     if (!user || songIsPending(song) || song.status === 'failed') return;
-      setVariationSourceSong(null);
+    setVariationSourceSong(null);
     setSongError(null);
     try {
-      const blob = await fetchSongAudio(user, song.id);
-      const nextUrl = URL.createObjectURL(blob);
-      setCurrentSongUrl((previous) => {
-        if (previous) URL.revokeObjectURL(previous);
-        return nextUrl;
-      });
-      setCurrentLibrarySong(song);
-      setIsLibrarySongPlaying(false);
-      setLibraryPlaybackProgress(0);
-      setLibraryPlaybackDuration(0);
-      const audio = libraryAudioRef.current;
-      if (audio) {
-        audio.src = nextUrl;
-        audio.load();
-        await audio.play();
-      }
+      await player.toggle(song);
     } catch (error) {
-      setSongError(error instanceof ApiError ? error.message : 'The song could not be loaded.');
+      setSongError(error instanceof ApiError ? error.message : 'The song could not be played.');
     }
-  };
-
-  const toggleLibrarySongPlayback = async (song: LibrarySong) => {
-    const audio = libraryAudioRef.current;
-    if (currentLibrarySong?.id === song.id && audio) {
-      if (audio.paused) {
-        try {
-          await audio.play();
-        } catch {
-          setSongError('The song could not be played.');
-        }
-      } else {
-        audio.pause();
-      }
-      return;
-    }
-    await playLibrarySong(song);
   };
 
   const downloadLibrarySong = async (song: LibrarySong, format: 'mp3' | 'wav') => {
@@ -1377,6 +1350,8 @@ export default function App() {
       const generator = isSpeechGenre(compositionGenre) ? 'chirp-3-hd' : 'lyria';
       const { song: pending } = await prepareLyriaSong(user, style, nextLyrics, songName.trim() || 'Untitled', generator);
       pendingId = pending.id;
+      setLibraryPage(0);
+      setLibraryCursors([null]);
       setLibrarySongs((current) => [pending, ...current.filter((item) => item.id !== pending.id)]);
     } catch (error) {
       const message = displaySongError(
@@ -1400,7 +1375,7 @@ export default function App() {
 
   const applyLibrarySongUpdate = (updated: LibrarySong) => {
     setLibrarySongs((current) => current.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
-    setCurrentLibrarySong((current) => current?.id === updated.id ? { ...current, ...updated } : current);
+    player.replaceSong(updated);
     setVariationSourceSong((current) => current?.id === updated.id ? { ...current, ...updated } : current);
   };
 
@@ -1535,13 +1510,7 @@ export default function App() {
       setLibrarySongs((current) => current.filter((item) => item.id !== song.id));
       setVariationSourceSong((current) => current?.id === song.id ? null : current);
       setOpenSongMenuId((current) => current === song.id ? null : current);
-      if (currentLibrarySong?.id === song.id) {
-        setCurrentLibrarySong(null);
-        setCurrentSongUrl((previous) => {
-          if (previous) URL.revokeObjectURL(previous);
-          return null;
-        });
-      }
+      player.stopIf(song.id);
     } catch (error) {
       setSongError(error instanceof ApiError ? error.message : 'The song could not be deleted.');
     } finally {
@@ -2384,7 +2353,7 @@ export default function App() {
                 )}
               </div>
               {songError && <p className="song-status error" role="status">{songError}</p>}
-              {librarySongs.length === 0 ? (
+              {librarySongs.length === 0 && libraryPage === 0 ? (
                 <p className="muted small song-studio-empty">Generated songs will appear here so you can play or download them later.</p>
               ) : (
                 <>
@@ -2408,12 +2377,12 @@ export default function App() {
                                 className="song-library-play-overlay"
                                 onClick={() => void toggleLibrarySongPlayback(song)}
                                 aria-label={
-                                  currentLibrarySong?.id === song.id && isLibrarySongPlaying
+                                  player.current?.id === song.id && player.playing
                                     ? `Pause ${song.title}`
                                     : `Play ${song.title}`
                                 }
                               >
-                                {currentLibrarySong?.id === song.id && isLibrarySongPlaying ? '⏸' : '▶'}
+                                {player.current?.id === song.id && player.playing ? '⏸' : '▶'}
                               </button>
                             )}
                           </div>
@@ -2428,23 +2397,19 @@ export default function App() {
                             {song.status === 'failed' && song.error && (
                               <span className="song-library-error">{displaySongError(song.error)}</span>
                             )}
-                            {currentLibrarySong?.id === song.id && currentSongUrl && variationSourceSong?.id !== song.id && (
+                            {player.current?.id === song.id && variationSourceSong?.id !== song.id && (
                               <div className="song-library-progress">
                                 <input
                                   type="range"
                                   min="0"
-                                  max={libraryPlaybackDuration || 0}
+                                  max={player.duration || 0}
                                   step="0.1"
-                                  value={Math.min(libraryPlaybackProgress, libraryPlaybackDuration || 0)}
-                                  disabled={!libraryPlaybackDuration}
+                                  value={Math.min(player.progress, player.duration || 0)}
+                                  disabled={!player.duration}
                                   aria-label={`Seek ${song.title}`}
-                                  onChange={(event) => {
-                                    const nextTime = Number(event.target.value);
-                                    if (libraryAudioRef.current) libraryAudioRef.current.currentTime = nextTime;
-                                    setLibraryPlaybackProgress(nextTime);
-                                  }}
+                                  onChange={(event) => player.seek(Number(event.target.value))}
                                 />
-                                <span>{formatPlaybackTime(libraryPlaybackProgress)} / {formatPlaybackTime(libraryPlaybackDuration)}</span>
+                                <span>{formatPlaybackTime(player.progress)} / {formatPlaybackTime(player.duration)}</span>
                               </div>
                             )}
                           </div>
@@ -2577,6 +2542,33 @@ export default function App() {
                       ))}
                     </ul>
                   )}
+                  {(libraryPage > 0 || libraryNextCursor) && (
+                    <div className="song-library-pager">
+                      <button
+                        type="button"
+                        onClick={() => setLibraryPage((page) => Math.max(0, page - 1))}
+                        disabled={libraryPage === 0}
+                      >
+                        Previous
+                      </button>
+                      <span>Page {libraryPage + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!libraryNextCursor) return;
+                          setLibraryCursors((current) => {
+                            const next = current.slice(0, libraryPage + 1);
+                            next[libraryPage + 1] = libraryNextCursor;
+                            return next;
+                          });
+                          setLibraryPage((page) => page + 1);
+                        }}
+                        disabled={!libraryNextCursor}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </aside>
@@ -2584,18 +2576,6 @@ export default function App() {
         </section>
 
       </main>
-
-      <audio
-        ref={libraryAudioRef}
-        className="song-library-audio-engine"
-        onPlay={() => setIsLibrarySongPlaying(true)}
-        onPause={() => setIsLibrarySongPlaying(false)}
-        onEnded={() => setIsLibrarySongPlaying(false)}
-        onLoadedMetadata={(event) => setLibraryPlaybackDuration(event.currentTarget.duration)}
-        onTimeUpdate={(event) => setLibraryPlaybackProgress(event.currentTarget.currentTime)}
-      >
-        Your browser cannot play this song.
-      </audio>
 
       {youtubeUploadSong && user && (
         <YouTubeUploadDialog song={youtubeUploadSong} user={user} onClose={() => setYoutubeUploadSong(null)} />

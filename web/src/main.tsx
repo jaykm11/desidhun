@@ -1,9 +1,10 @@
-import { StrictMode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { AppShell } from './AppShell.tsx'
 import { AuthProvider } from './auth/AuthProvider.tsx'
+import { LibraryPlayerProvider } from './LibraryPlayer.tsx'
 import { LegalPage, legalPageForPath } from './LegalPage.tsx'
 import SandboxPaymentPage from './SandboxPaymentPage.tsx'
 import AboutPage from './AboutPage.tsx'
@@ -15,43 +16,47 @@ import ShareSongPage from './ShareSongPage.tsx'
 import PresetsPage from './PresetsPage.tsx'
 import AdminPage from './AdminPage.tsx'
 import PaymentResultPage from './PaymentResultPage.tsx'
+import { NavigationProvider, useLocation } from './navigation.tsx'
 
-const legalPage = legalPageForPath(window.location.pathname);
-const shareSongPage = /^\/s\/[^/]+\/?$/.test(window.location.pathname);
-const sandboxPaymentPage = window.location.pathname.replace(/\/+$/, '') === '/sandbox-payment';
-const aboutPage = window.location.pathname.replace(/\/+$/, '') === '/about';
-const accountPage = window.location.pathname.replace(/\/+$/, '') === '/account';
-const membershipPage = window.location.pathname.replace(/\/+$/, '') === '/membership';
-const communityPage = window.location.pathname.replace(/\/+$/, '') === '/community';
-const explorePage = window.location.pathname.replace(/\/+$/, '') === '/explore';
-const presetsPage = window.location.pathname.replace(/\/+$/, '') === '/presets';
-const adminPage = window.location.pathname.replace(/\/+$/, '') === '/admin';
-const paymentResultPage = window.location.pathname.replace(/\/+$/, '') === '/payment-result';
+function ShellPage() {
+  const { pathname, search } = useLocation();
+  const path = pathname.replace(/\/+$/, '') || '/';
+  const legalPage = legalPageForPath(pathname);
+  let page: ReactNode;
+  if (legalPage) page = <LegalPage page={legalPage} />;
+  else if (/^\/s\/[^/]+\/?$/.test(pathname)) page = <ShareSongPage />;
+  else if (path === '/membership') page = <MembershipPage />;
+  else if (path === '/about') page = <AboutPage />;
+  else if (path === '/account') page = <AccountPage />;
+  else if (path === '/explore') page = <ExplorePage />;
+  else if (path === '/presets') page = <PresetsPage />;
+  else if (path === '/admin') page = <AdminPage />;
+  else if (path === '/community') page = <CommunityPage />;
+  else if (path === '/sandbox-payment') page = <SandboxPaymentPage />;
+  else if (path === '/payment-result') page = <PaymentResultPage />;
+  else page = <App />;
+  return <div key={`${pathname}${search}`}>{page}</div>;
+}
 
-const landingPage = !legalPage && !shareSongPage && !membershipPage && !aboutPage && !accountPage
-  && !explorePage && !presetsPage && !adminPage && !communityPage && !sandboxPaymentPage && !paymentResultPage;
-
-function shellPage() {
-  if (legalPage) return <LegalPage page={legalPage} />;
-  if (shareSongPage) return <ShareSongPage />;
-  if (membershipPage) return <MembershipPage />;
-  if (aboutPage) return <AboutPage />;
-  if (accountPage) return <AccountPage />;
-  if (explorePage) return <ExplorePage />;
-  if (presetsPage) return <PresetsPage />;
-  if (adminPage) return <AdminPage />;
-  if (communityPage) return <CommunityPage />;
-  if (sandboxPaymentPage) return <SandboxPaymentPage />;
-  if (paymentResultPage) return <PaymentResultPage />;
-  return <App />;
+function Shell() {
+  const { pathname } = useLocation();
+  const path = pathname.replace(/\/+$/, '') || '/';
+  const landingPage = path === '/' && !legalPageForPath(pathname);
+  return (
+    <AppShell isLanding={landingPage}>
+      <ShellPage />
+    </AppShell>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
-      <AppShell isLanding={landingPage}>
-        {shellPage()}
-      </AppShell>
+      <NavigationProvider>
+        <LibraryPlayerProvider>
+          <Shell />
+        </LibraryPlayerProvider>
+      </NavigationProvider>
     </AuthProvider>
   </StrictMode>,
 )

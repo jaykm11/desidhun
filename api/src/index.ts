@@ -1367,15 +1367,21 @@ api.post('/v1/songs/generate', requireUser, async (req: AuthenticatedRequest, re
 });
 
 api.get('/v1/songs', requireUser, async (req: AuthenticatedRequest, res) => {
-  const snapshot = await db
-    .collection('users')
-    .doc(req.user!.uid)
-    .collection('songs')
-    .orderBy('createdAt', 'desc')
-    .limit(50)
-    .get();
+  const requested = Number(req.query.limit);
+  const limit = Number.isFinite(requested) ? Math.min(24, Math.max(1, Math.floor(requested))) : 50;
+  const songs = db.collection('users').doc(req.user!.uid).collection('songs');
+  let query = songs.orderBy('createdAt', 'desc');
+  const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : '';
+  if (cursor) {
+    const cursorDoc = await songs.doc(cursor).get();
+    if (cursorDoc.exists) query = query.startAfter(cursorDoc);
+  }
+  const snapshot = await query.limit(limit + 1).get();
+  const page = snapshot.docs.slice(0, limit);
+  const hasMore = snapshot.docs.length > limit;
   return res.json({
-    songs: snapshot.docs.map((doc) => publicSong(doc.id, doc.data())),
+    songs: page.map((doc) => publicSong(doc.id, doc.data())),
+    nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
   });
 });
 
